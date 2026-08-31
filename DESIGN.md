@@ -28,7 +28,8 @@ Restrained strategy, expressed only in OKLCH.
 
 ## Components
 
-- File selectors are numbered horizontal rows with a native file input and selected filename.
+- File selectors are numbered horizontal drop zones with native file inputs, clear drag feedback, and selected filenames.
+- Template selection defaults to a verified built-in device profile and retains an explicit custom-template upload path.
 - Primary button is solid indigo with white text; secondary controls remain neutral.
 - Advanced settings use native `details` semantics.
 - Status is a live region with icon, title, and concise message.

@@ -26,7 +26,14 @@ from .core import (
 )
 
 STATIC_DIR = Path(__file__).with_name("static")
+TEMPLATE_DIR = Path(__file__).with_name("templates")
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
+BUILTIN_TEMPLATES = {
+    "realme-gt-neo5-240w": {
+        "label": "realme GT Neo5 240W",
+        "path": TEMPLATE_DIR / "realme-gt-neo5-240w.jpg",
+    }
+}
 
 app = FastAPI(title="微信实况照片封装器", docs_url=None, redoc_url=None)
 
@@ -47,18 +54,50 @@ def _suffix(upload: UploadFile, fallback: str) -> str:
     return value if value and len(value) <= 10 else fallback
 
 
+def _builtin_template(template_id: str) -> Path:
+    item = BUILTIN_TEMPLATES.get(template_id)
+    if not item:
+        raise ForgeError("请选择有效的内置模板，或上传自定义模板")
+    path = Path(item["path"])
+    if not path.is_file():
+        raise ForgeError(f"内置模板缺失：{item['label']}")
+    return path
+
+
+async def _resolve_template(
+    upload: UploadFile | None, template_id: str, work: Path
+) -> Path:
+    if upload and upload.filename:
+        path = work / f"template{_suffix(upload, '.jpg')}"
+        await _save_upload(upload, path)
+        return path
+    return _builtin_template(template_id)
+
+
 @app.get("/api/health")
 def health() -> dict[str, object]:
     missing = check_dependencies()
     return {"ok": not missing, "missing": missing}
 
 
+@app.get("/api/templates")
+def templates() -> dict[str, object]:
+    return {
+        "templates": [
+            {"id": template_id, "label": str(item["label"])}
+            for template_id, item in BUILTIN_TEMPLATES.items()
+        ]
+    }
+
+
 @app.post("/api/inspect")
-async def inspect(template: Annotated[UploadFile, File()]) -> dict[str, object]:
+async def inspect(
+    template: Annotated[UploadFile | None, File()] = None,
+    template_id: Annotated[str, Form()] = "",
+) -> dict[str, object]:
     work = Path(tempfile.mkdtemp(prefix="wechat-live-inspect-"))
     try:
-        path = work / f"template{_suffix(template, '.jpg')}"
-        await _save_upload(template, path)
+        path = await _resolve_template(template, template_id, work)
         profile = await anyio.to_thread.run_sync(inspect_template, path)
         return profile.to_dict()
     except (ForgeError, ValueError) as exc:
@@ -69,9 +108,10 @@ async def inspect(template: Annotated[UploadFile, File()]) -> dict[str, object]:
 
 @app.post("/api/convert")
 async def convert(
-    template: Annotated[UploadFile, File()],
     cover: Annotated[UploadFile, File()],
     video: Annotated[UploadFile, File()],
+    template: Annotated[UploadFile | None, File()] = None,
+    template_id: Annotated[str, Form()] = "",
     start: Annotated[float, Form()] = 0.0,
     duration: Annotated[str, Form()] = "",
     key_time: Annotated[str, Form()] = "",
@@ -81,11 +121,10 @@ async def convert(
 ) -> FileResponse:
     work = Path(tempfile.mkdtemp(prefix="wechat-live-web-"))
     try:
-        template_path = work / f"template{_suffix(template, '.jpg')}"
+        template_path = await _resolve_template(template, template_id, work)
         cover_path = work / f"cover{_suffix(cover, '.jpg')}"
         video_path = work / f"video{_suffix(video, '.mp4')}"
         output_path = work / "motion-photo.jpg"
-        await _save_upload(template, template_path)
         await _save_upload(cover, cover_path)
         await _save_upload(video, video_path)
         options = BuildOptions(

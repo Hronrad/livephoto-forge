@@ -19,26 +19,29 @@
   <main>
     <section class="intro" aria-labelledby="page-title">
       <p class="eyebrow">OPPO · OnePlus · realme</p>
-      <h1 id="page-title">三份文件，生成可发朋友圈的实况照片</h1>
-      <p>从目标手机取一张确认可用的原生实况 JPG 作为模板，选择封面与短视频即可转换。</p>
+      <h1 id="page-title">拖入封面与视频，生成可发朋友圈的实况照片</h1>
+      <p>直接使用内置的已验证手机模板，也可以上传其他机型的原生实况 JPG。</p>
     </section>
 
     <div class="workspace">
       <form id="convert-form" class="converter">
         <div class="file-list">
-          <label class="file-row" for="template">
+          <div class="file-row template-row" data-drop-target="template">
             <span class="step">1</span>
-            <span class="file-copy"><strong>手机原生模板</strong><small>该手机拍摄、可发朋友圈的实况 JPG</small></span>
-            <span class="file-action"><span data-filename="template">选择 JPG</span><input id="template" name="template" type="file" accept="image/jpeg,.jpg,.jpeg" required></span>
-          </label>
-          <label class="file-row" for="cover">
+            <span class="file-copy"><strong>选择手机模板</strong><small>内置模板可直接使用；拖入 JPG 会切换为自定义模板</small></span>
+            <span class="template-controls">
+              <label class="select-control"><span class="sr-only">模板来源</span><select id="template-choice" name="template_id" aria-label="模板来源"><option value="" disabled>正在加载模板…</option></select></label>
+              <label class="file-action" for="template"><span data-filename="template">上传其他模板</span><input id="template" name="template" type="file" accept="image/jpeg,.jpg,.jpeg"></label>
+            </span>
+          </div>
+          <label class="file-row" for="cover" data-drop-target="cover">
             <span class="step">2</span>
-            <span class="file-copy"><strong>封面图片</strong><small>最终在相册和朋友圈中看到的静态画面</small></span>
+            <span class="file-copy"><strong>封面图片</strong><small>拖入图片，或点击右侧选择</small></span>
             <span class="file-action"><span data-filename="cover">选择图片</span><input id="cover" name="cover" type="file" accept="image/*,.heic,.heif" required></span>
           </label>
-          <label class="file-row" for="video">
+          <label class="file-row" for="video" data-drop-target="video">
             <span class="step">3</span>
-            <span class="file-copy"><strong>实况视频</strong><small>建议 1–3 秒，工具会按模板编码与裁切</small></span>
+            <span class="file-copy"><strong>实况视频</strong><small>拖入视频，建议 1–3 秒</small></span>
             <span class="file-action"><span data-filename="video">选择视频</span><input id="video" name="video" type="file" accept="video/*,.mov,.mp4,.m4v" required></span>
           </label>
         </div>
@@ -61,7 +64,7 @@
       <aside class="side-panel" aria-label="状态与使用提示">
         <section id="status" class="status" aria-live="polite">
           <span class="status-dot" aria-hidden="true"></span>
-          <div><strong id="status-title">等待选择文件</strong><p id="status-message">模板会决定输出的机型标记、编码、尺寸和时长。</p></div>
+          <div><strong id="status-title">正在载入内置模板</strong><p id="status-message">模板会决定输出的机型标记、编码、尺寸和时长。</p></div>
         </section>
         <dl id="template-info" class="template-info" hidden>
           <div><dt>设备</dt><dd id="device-value">—</dd></div>
