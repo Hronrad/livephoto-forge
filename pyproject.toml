@@ -4,13 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wechat-motion-photo-forge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Build WeChat Moments-compatible OPPO/OnePlus/realme Motion Photos from a cover, video, and native phone template."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "WeChat Motion Photo Forge contributors" }]
-dependencies = ["PySide6>=6.7"]
+dependencies = [
+  "fastapi>=0.115",
+  "python-multipart>=0.0.18",
+  "uvicorn>=0.32",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
@@ -22,7 +26,10 @@ classifiers = [
 
 [project.scripts]
 wechat-live = "wechat_motion_photo.cli:main"
-wechat-live-gui = "wechat_motion_photo.gui:main"
+wechat-live-web = "wechat_motion_photo.web:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wechat_motion_photo"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/wechat_motion_photo/static" = "wechat_motion_photo/static"

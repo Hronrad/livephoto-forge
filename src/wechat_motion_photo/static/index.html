@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="在本机把封面与视频封装为可发微信朋友圈的 realme、OPPO、OnePlus 实况照片。">
+  <title>微信实况照片封装器</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="微信实况照片封装器首页">
+      <span class="brand-mark" aria-hidden="true">◉</span>
+      实况照片封装器
+    </a>
+    <span class="local-badge">仅在本机处理</span>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">OPPO · OnePlus · realme</p>
+      <h1 id="page-title">三份文件，生成可发朋友圈的实况照片</h1>
+      <p>从目标手机取一张确认可用的原生实况 JPG 作为模板，选择封面与短视频即可转换。</p>
+    </section>
+
+    <div class="workspace">
+      <form id="convert-form" class="converter">
+        <div class="file-list">
+          <label class="file-row" for="template">
+            <span class="step">1</span>
+            <span class="file-copy"><strong>手机原生模板</strong><small>该手机拍摄、可发朋友圈的实况 JPG</small></span>
+            <span class="file-action"><span data-filename="template">选择 JPG</span><input id="template" name="template" type="file" accept="image/jpeg,.jpg,.jpeg" required></span>
+          </label>
+          <label class="file-row" for="cover">
+            <span class="step">2</span>
+            <span class="file-copy"><strong>封面图片</strong><small>最终在相册和朋友圈中看到的静态画面</small></span>
+            <span class="file-action"><span data-filename="cover">选择图片</span><input id="cover" name="cover" type="file" accept="image/*,.heic,.heif" required></span>
+          </label>
+          <label class="file-row" for="video">
+            <span class="step">3</span>
+            <span class="file-copy"><strong>实况视频</strong><small>建议 1–3 秒，工具会按模板编码与裁切</small></span>
+            <span class="file-action"><span data-filename="video">选择视频</span><input id="video" name="video" type="file" accept="video/*,.mov,.mp4,.m4v" required></span>
+          </label>
+        </div>
+
+        <details class="advanced">
+          <summary>高级设置</summary>
+          <div class="option-grid">
+            <label>开始时间（秒）<input name="start" type="number" min="0" step="0.1" value="0"></label>
+            <label>生成时长（秒）<input name="duration" type="number" min="0.1" step="0.1" placeholder="跟随模板"></label>
+            <label>封面时间（秒）<input name="key_time" type="number" min="0" step="0.1" placeholder="跟随模板"></label>
+            <label>画面适配<select name="crop_mode"><option value="crop">铺满并裁切</option><option value="fit">完整保留（黑边）</option></select></label>
+            <label>封面旋转<select name="cover_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
+            <label>视频旋转<select name="video_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
+          </div>
+        </details>
+
+        <button id="submit-button" class="primary" type="submit">生成实况照片</button>
+      </form>
+
+      <aside class="side-panel" aria-label="状态与使用提示">
+        <section id="status" class="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div><strong id="status-title">等待选择文件</strong><p id="status-message">模板会决定输出的机型标记、编码、尺寸和时长。</p></div>
+        </section>
+        <dl id="template-info" class="template-info" hidden>
+          <div><dt>设备</dt><dd id="device-value">—</dd></div>
+          <div><dt>视频</dt><dd id="video-value">—</dd></div>
+          <div><dt>厂商尾块</dt><dd id="trailer-value">—</dd></div>
+        </dl>
+        <div class="transfer-note">
+          <strong>生成后如何使用</strong>
+          <p>将 JPG 原样复制到手机的 <code>DCIM/Camera</code>，等待相册识别后再从朋友圈选择。不要通过普通聊天图片中转。</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer>文件不会上传到互联网 · 输入文件不会被修改</footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>
