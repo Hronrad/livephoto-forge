@@ -1,6 +1,6 @@
 # 同类项目调研
 
-调研日期：2026-08-31。
+调研日期：2026-09-28。
 
 ## 结论
 
@@ -12,7 +12,19 @@
 4. 以微信朋友圈是否出现“实况”选项作为端到端验收条件；
 5. 跨平台 GUI 与 CLI。
 
-本项目因此采用模板驱动，而不是再维护一组容易随机型和固件失效的硬编码常量。
+本项目继续对微信依赖的私有格式采用样本模板；对已有公开写入逻辑且有明确设备证据的格式，则提供内置机型预设，避免用户重复上传。
+
+## 已接入的公开格式机型预设
+
+| 列表机型 | 写入逻辑 | 设备证据 | 接入结论 |
+| --- | --- | --- | --- |
+| Google Pixel 2 | MicroVideo v1 XMP，JPEG 后直接追加 MP4 | `keith-turner/motion-photos` 明确针对 Pixel 2 | 已接入 |
+| Redmi K70 Ultra | MicroVideo v1 / JPEG 后附 MP4 | `koi0724/xiaomi-motion-photo-extractor` 在该机型 HyperOS 上验证 | 已接入 |
+| Samsung Galaxy S7 | `MotionPhoto_Data` 数据块与 SEF v106 尾索引 | Galaxy S7 提取工具与 `doodspav/motionphoto` 合成器 | 已接入 |
+| OPPO Find X7 Ultra | Google Motion Photo XMP + OpCamera O-Live v2 + MPF + MP4 | `Young-Spark/oppo-live-photo-maker` 对比 Find X7 Ultra 真机样本并验证 | 已接入 |
+| HUAWEI Mate 80 | JPEG + MP4 + 60 字节 `LIVE_` 尾标 | `live-photo-box` 的测试矩阵与 HUAWEI 写入实现 | 已接入 |
+
+vivo X300 及更新机型虽已有开源协议实现，但上游仍标记为“测试中”，因此暂不放入正式列表。只有拆分/提取能力、没有写入实现或设备证据的项目也不会直接转成可选模板。
 
 ## 项目比较
 
@@ -68,4 +80,3 @@
 - EXIF `UserComment` 大小写和数值需要跟随模板；
 - 原生 MP4 参数为目标机型偏好的 HEVC、画幅、帧率和时长；
 - EXIF Orientation 必须用数值方式写入并归一为 `1`，否则 ExifTool 的字符串转换可能写成 Rotate 180。
-

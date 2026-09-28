@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "wechat-motion-photo-forge"
 version = "0.3.0"
-description = "Build WeChat Moments-compatible OPPO/OnePlus/realme Motion Photos from a cover, video, and native phone template."
+description = "Build OPLUS and HONOR Motion Photos from a cover, video, and native phone template."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

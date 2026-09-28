@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="在本机把封面与视频封装为可发微信朋友圈的 realme、OPPO、OnePlus 实况照片。">
+  <meta name="description" content="把封面与视频封装为便于传输与使用的动态照片。">
   <title>微信实况照片封装器</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=5">
 </head>
 <body>
   <header class="site-header">
@@ -13,25 +13,24 @@
       <span class="brand-mark" aria-hidden="true">◉</span>
       实况照片封装器
     </a>
-    <span class="local-badge">仅在本机处理</span>
+    <a class="header-link" href="https://hronrad.cn/" target="_blank" rel="noopener noreferrer">Hronrad.cn <span aria-hidden="true">↗</span></a>
   </header>
 
   <main>
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow">OPPO · OnePlus · realme</p>
-      <h1 id="page-title">拖入封面与视频，生成可发朋友圈的实况照片</h1>
-      <p>直接使用内置的已验证手机模板，也可以上传其他机型的原生实况 JPG。</p>
+      <h1 id="page-title">简单一键生成动态实况照片，可发小红书、朋友圈</h1>
+      <p>选择已有手机模板，添加封面与短视频，即可完成封装。</p>
     </section>
 
     <div class="workspace">
       <form id="convert-form" class="converter">
         <div class="file-list">
-          <div class="file-row template-row" data-drop-target="template">
+          <div class="file-row template-row">
             <span class="step">1</span>
-            <span class="file-copy"><strong>选择手机模板</strong><small>内置模板可直接使用；拖入 JPG 会切换为自定义模板</small></span>
+            <span class="file-copy"><strong>选择手机模板</strong><small>可使用目前已有机型模板</small></span>
             <span class="template-controls">
               <label class="select-control"><span class="sr-only">模板来源</span><select id="template-choice" name="template_id" aria-label="模板来源"><option value="" disabled>正在加载模板…</option></select></label>
-              <label class="file-action" for="template"><span data-filename="template">上传其他模板</span><input id="template" name="template" type="file" accept="image/jpeg,.jpg,.jpeg"></label>
+              <button id="open-template-upload" class="secondary" type="button">上传您的机型模板</button>
             </span>
           </div>
           <label class="file-row" for="cover" data-drop-target="cover">
@@ -55,6 +54,7 @@
             <label>画面适配<select name="crop_mode"><option value="crop">铺满并裁切</option><option value="fit">完整保留（黑边）</option></select></label>
             <label>封面旋转<select name="cover_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
             <label>视频旋转<select name="video_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
+            <label class="checkbox-option"><input id="zip-output" name="zip_output" type="checkbox" value="true" checked><span><strong>输出 ZIP 压缩包</strong><small>关闭后直接下载 JPG</small></span></label>
           </div>
         </details>
 
@@ -73,13 +73,46 @@
         </dl>
         <div class="transfer-note">
           <strong>生成后如何使用</strong>
-          <p>将 JPG 原样复制到手机的 <code>DCIM/Camera</code>，等待相册识别后再从朋友圈选择。不要通过普通聊天图片中转。</p>
+          <p>默认生成含有动态图片的压缩包，从而保证您在使用微信等工具传输时不会丢失原信息，待传输完毕后再在新设备上解压该压缩包即可。</p>
         </div>
       </aside>
     </div>
   </main>
 
-  <footer>文件不会上传到互联网 · 输入文件不会被修改</footer>
-  <script src="/app.js" defer></script>
+  <dialog id="template-upload-dialog" aria-labelledby="template-upload-title">
+    <form id="template-upload-form" class="dialog-card">
+      <div class="dialog-heading">
+        <div>
+          <h2 id="template-upload-title">上传您的机型模板</h2>
+          <p>机型未收录？可上传一张原生动态照片帮助适配。建议先压缩为 ZIP，避免传输时丢失图片元信息。上传的图片仅用于机型适配，适配完成后销毁。</p>
+        </div>
+        <button id="close-template-upload" class="icon-button" type="button" aria-label="关闭上传界面">×</button>
+      </div>
+      <label class="upload-picker" for="template-submission">
+        <strong>动态图片或压缩包</strong>
+        <span data-upload-filename>支持 JPG、ZIP、TAR、TGZ、BZ2、XZ</span>
+        <input id="template-submission" name="file" type="file" accept="image/jpeg,.jpg,.jpeg,.zip,.tar,.tgz,.tar.gz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar" required>
+      </label>
+      <p id="template-upload-status" class="dialog-status" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="secondary" id="cancel-template-upload" type="button">取消</button>
+        <button class="primary dialog-primary" id="submit-template-upload" type="submit">检查并提交</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="site-footer">
+    <p class="privacy-note">转换素材在处理后删除</p>
+    <nav class="project-links" aria-label="项目与作者">
+      <a href="https://github.com/Hronrad/motion-photo-forge" target="_blank" rel="noopener noreferrer">项目源码 <span aria-hidden="true">↗</span></a>
+      <a href="https://github.com/Hronrad" target="_blank" rel="noopener noreferrer">GitHub · Hronrad <span aria-hidden="true">↗</span></a>
+      <a class="star-link" href="https://github.com/Hronrad/motion-photo-forge" target="_blank" rel="noopener noreferrer" aria-label="如果这个工具对您有用，请到 GitHub 为项目点个 Star">
+        <span class="star-icon" aria-hidden="true">★</span>
+        <span>有用的话，点个 Star</span>
+        <span class="star-arrow" aria-hidden="true">↗</span>
+      </a>
+    </nav>
+  </footer>
+  <script src="/app.js?v=7" defer></script>
 </body>
 </html>

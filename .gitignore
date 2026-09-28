@@ -7,3 +7,8 @@ dist/
 .DS_Store
 output/
 .tmp-*
+template/*
+!template/.gitkeep
+DESIGN.md
+PRODUCT.md
+THIRD_PARTY_NOTICES.md

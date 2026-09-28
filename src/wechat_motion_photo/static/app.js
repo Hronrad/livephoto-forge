@@ -1,11 +1,16 @@
 const form = document.querySelector("#convert-form");
-const templateInput = document.querySelector("#template");
 const templateChoice = document.querySelector("#template-choice");
 const status = document.querySelector("#status");
 const statusTitle = document.querySelector("#status-title");
 const statusMessage = document.querySelector("#status-message");
 const submitButton = document.querySelector("#submit-button");
 const templateInfo = document.querySelector("#template-info");
+const zipOutput = document.querySelector("#zip-output");
+const templateDialog = document.querySelector("#template-upload-dialog");
+const templateUploadForm = document.querySelector("#template-upload-form");
+const templateSubmission = document.querySelector("#template-submission");
+const templateUploadStatus = document.querySelector("#template-upload-status");
+const templateUploadButton = document.querySelector("#submit-template-upload");
 
 function setStatus(state, title, message) {
   status.dataset.state = state;
@@ -19,7 +24,6 @@ function serverError(payload, fallback) {
 
 function fileLabel(input) {
   const defaults = {
-    template: "上传其他模板",
     cover: "选择图片",
     video: "选择视频",
   };
@@ -33,21 +37,18 @@ function renderTemplate(profile) {
   document.querySelector("#video-value").textContent = `${profile.video_codec.toUpperCase()} · ${profile.video_duration.toFixed(2)} 秒`;
   document.querySelector("#trailer-value").textContent = `${profile.trailer_length} B`;
   templateInfo.hidden = false;
-  document.querySelector('[data-drop-target="template"]').dataset.ready = "true";
 }
 
 async function inspectTemplate() {
-  const file = templateInput.files[0];
   const templateId = templateChoice.value;
   templateInfo.hidden = true;
-  if (!file && !templateId) {
-    setStatus("idle", "等待自定义模板", "拖入或点击上传目标手机的原生实况 JPG。");
+  if (!templateId) {
+    setStatus("idle", "等待手机模板", "请从当前已有的模板中选择一个机型。");
     return;
   }
   setStatus("working", "正在检查模板", "读取目标手机的机型与实况格式…");
   const body = new FormData();
-  if (file) body.append("template", file);
-  if (!file && templateId) body.append("template_id", templateId);
+  body.append("template_id", templateId);
   try {
     const response = await fetch("/api/inspect", { method: "POST", body });
     const payload = await response.json();
@@ -55,25 +56,19 @@ async function inspectTemplate() {
     renderTemplate(payload);
     setStatus("ready", "模板有效", "拖入封面与实况视频，然后生成。");
   } catch (error) {
-    document.querySelector('[data-drop-target="template"]').dataset.ready = "false";
     setStatus("error", "模板检查失败", error.message);
   }
 }
 
 function acceptsFile(input, file) {
   const extension = file.name.split(".").pop()?.toLowerCase();
-  if (input.id === "template") return file.type === "image/jpeg" || ["jpg", "jpeg"].includes(extension);
   if (input.id === "cover") return file.type.startsWith("image/") || ["heic", "heif"].includes(extension);
   return file.type.startsWith("video/") || ["mov", "mp4", "m4v"].includes(extension);
 }
 
-document.querySelectorAll('input[type="file"]').forEach((input) => {
+form.querySelectorAll('input[type="file"]').forEach((input) => {
   input.addEventListener("change", () => {
     fileLabel(input);
-    if (input === templateInput && input.files.length) {
-      templateChoice.value = "";
-      inspectTemplate();
-    }
   });
 });
 
@@ -113,23 +108,73 @@ document.querySelectorAll("[data-drop-target]").forEach((row) => {
 });
 
 templateChoice.addEventListener("change", () => {
-  templateInput.value = "";
-  fileLabel(templateInput);
   inspectTemplate();
+});
+
+function closeTemplateDialog() {
+  templateDialog.close();
+}
+
+document.querySelector("#open-template-upload").addEventListener("click", () => {
+  templateUploadForm.reset();
+  document.querySelector("[data-upload-filename]").textContent = "支持 JPG、ZIP、TAR、TGZ、BZ2、XZ";
+  templateUploadStatus.textContent = "";
+  templateUploadStatus.dataset.state = "idle";
+  templateDialog.showModal();
+});
+
+document.querySelector("#close-template-upload").addEventListener("click", closeTemplateDialog);
+document.querySelector("#cancel-template-upload").addEventListener("click", closeTemplateDialog);
+templateDialog.addEventListener("click", (event) => {
+  if (event.target === templateDialog) closeTemplateDialog();
+});
+
+templateSubmission.addEventListener("change", () => {
+  document.querySelector("[data-upload-filename]").textContent =
+    templateSubmission.files[0]?.name || "支持 JPG、ZIP、TAR、TGZ、BZ2、XZ";
+});
+
+templateUploadForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!templateUploadForm.reportValidity()) return;
+  templateUploadButton.disabled = true;
+  templateUploadButton.textContent = "正在检查…";
+  templateUploadStatus.dataset.state = "working";
+  templateUploadStatus.textContent = "正在解压并验证动态图片…";
+  try {
+    const response = await fetch("/api/template-submissions", {
+      method: "POST",
+      body: new FormData(templateUploadForm),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(serverError(payload, "模板上传失败"));
+    templateUploadStatus.dataset.state = "success";
+    templateUploadStatus.textContent = `已收到 ${payload.submission.label} 的动态图片，将用于机型适配。`;
+    setTimeout(closeTemplateDialog, 1200);
+  } catch (error) {
+    templateUploadStatus.dataset.state = "error";
+    templateUploadStatus.textContent = error.message;
+  } finally {
+    templateUploadButton.disabled = false;
+    templateUploadButton.textContent = "检查并提交";
+  }
 });
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!form.reportValidity()) return;
-  if (!templateInput.files[0] && !templateChoice.value) {
-    setStatus("error", "请选择手机模板", "请选择内置模板，或上传目标手机的原生实况 JPG。");
+  if (!templateChoice.value) {
+    setStatus("error", "请选择手机模板", "请从当前已有的机型模板中选择。");
     return;
   }
   submitButton.disabled = true;
   submitButton.textContent = "正在生成，请稍候…";
   setStatus("working", "正在生成实况照片", "视频转码通常需要几十秒，请保持页面打开。");
   try {
-    const response = await fetch("/api/convert", { method: "POST", body: new FormData(form) });
+    const zipRequested = zipOutput.checked;
+    const requestBody = new FormData(form);
+    requestBody.set("zip_output", zipRequested ? "true" : "false");
+    const response = await fetch("/api/convert", { method: "POST", body: requestBody });
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
       throw new Error(serverError(payload, "转换失败"));
@@ -139,12 +184,25 @@ form.addEventListener("submit", async (event) => {
     const link = document.createElement("a");
     const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
     link.href = url;
-    link.download = `IMG${stamp}.jpg`;
+    const standardAndroid = new Set([
+      "google-pixel-2",
+      "redmi-k70-ultra",
+      "samsung-galaxy-s7",
+    ]).has(templateChoice.value);
+    link.download = zipRequested
+      ? `IMG${stamp}.zip`
+      : standardAndroid
+        ? `MVIMG${stamp}MP.jpg`
+        : `IMG${stamp}.jpg`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus("success", "生成完成", "JPG 已开始下载，可原样复制到手机 DCIM/Camera。");
+    setStatus(
+      "success",
+      "生成完成",
+      zipRequested ? "ZIP 已开始下载，传输到新设备后再解压即可。" : "JPG 已开始下载。",
+    );
   } catch (error) {
     setStatus("error", "生成失败", error.message);
   } finally {
@@ -169,11 +227,10 @@ async function initialize() {
     payload.templates.forEach((item) => {
       templateChoice.add(new Option(item.label, item.id));
     });
-    templateChoice.add(new Option("其他机型（上传模板）", ""));
     if (payload.templates.length) templateChoice.value = payload.templates[0].id;
     await inspectTemplate();
   } catch {
-    setStatus("error", "本机服务未就绪", "刷新页面后重试。");
+    setStatus("error", "服务暂时未就绪", "刷新页面后重试。");
   }
 }
 
