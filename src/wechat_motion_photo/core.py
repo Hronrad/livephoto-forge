@@ -5,6 +5,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
@@ -65,6 +66,7 @@ class BuildOptions:
     cover_rotation: int = 0
     video_rotation: int = 0
     crf: int = 18
+    force_sdr_cover: bool = False
 
 
 @dataclass(frozen=True)
@@ -215,6 +217,27 @@ def _ffprobe(path: Path) -> dict[str, object]:
             capture=True,
         )
     )
+
+
+def _hdr_colors(path: Path) -> tuple[str, str, str, str] | None:
+    streams = _ffprobe(path).get("streams", [])
+    video_stream = next(
+        (stream for stream in streams if stream.get("codec_type") == "video"), None
+    )
+    if video_stream is None:
+        raise ForgeError("Video file has no video stream")
+    primaries = str(video_stream.get("color_primaries", ""))
+    transfer = str(video_stream.get("color_transfer", ""))
+    space = str(video_stream.get("color_space", ""))
+    color_range = str(video_stream.get("color_range", ""))
+    if primaries == "bt2020" and transfer in {"arib-std-b67", "smpte2084"}:
+        return (
+            primaries,
+            transfer,
+            space if space in {"bt2020nc", "bt2020c"} else "bt2020nc",
+            color_range if color_range in {"tv", "pc"} else "tv",
+        )
+    return None
 
 
 def _fps(value: str | None) -> float:
@@ -540,7 +563,8 @@ def _sha256(path: Path) -> str:
 
 
 def _prepare_xmp(
-    template: Path, video_length: int, trailer_length: int, timestamp_us: int
+    template: Path, video_length: int, trailer_length: int, timestamp_us: int,
+    gainmap_length: int = 0,
 ) -> str:
     xmp = _run(["exiftool", "-b", "-XMP", str(template)], capture=True)
     xmp = _replace_required(
@@ -561,19 +585,34 @@ def _prepare_xmp(
         xmp,
         "OpCamera:VideoLength",
     )
-    return _replace_required(
+    xmp = _replace_required(
         r'Item:Length="\d+"',
         f'Item:Length="{video_length + trailer_length}"',
         xmp,
         "Container Item:Length",
     )
+    if gainmap_length:
+        gainmap_item = (
+            '<rdf:li rdf:parseType="Resource"><Container:Item '
+            'Item:Mime="image/jpeg" Item:Semantic="GainMap" '
+            f'Item:Length="{gainmap_length}"/></rdf:li>'
+        )
+        video_item = re.search(
+            r'<rdf:li rdf:parseType="Resource">\s*<Container:Item\s+'
+            r'Item:Mime="video/mp4"', xmp
+        )
+        if video_item is None:
+            raise ForgeError("Template XMP has no MotionPhoto item")
+        xmp = xmp[:video_item.start()] + gainmap_item + xmp[video_item.start():]
+    return xmp
 
 
 def _protocol_xmp(
-    format_name: str, video_length: int, timestamp_us: int
+    format_name: str, video_length: int, timestamp_us: int,
+    gainmap_length: int = 0,
 ) -> str | None:
     """Create XMP for template-free protocols backed by public specifications."""
-    if format_name in {"huawei-live", "samsung-sef-v106"}:
+    if format_name in {"huawei-live", "samsung-sef-v106"} and not gainmap_length:
         return None
     camera_fields = (
         f' GCamera:MicroVideo="1" GCamera:MicroVideoVersion="1"'
@@ -594,17 +633,24 @@ def _protocol_xmp(
         )
     directory = ""
     namespaces = ""
-    if format_name != "microvideo-v1":
+    if format_name != "microvideo-v1" or gainmap_length:
         namespaces = (
             ' xmlns:Container="http://ns.google.com/photos/1.0/container/"'
             ' xmlns:Item="http://ns.google.com/photos/1.0/container/item/"'
         )
         padding = 24 if format_name == "samsung-sef-v106" else 0
+        gainmap_item = (
+            '<rdf:li rdf:parseType="Resource"><Container:Item '
+            'Item:Mime="image/jpeg" Item:Semantic="GainMap" '
+            f'Item:Length="{gainmap_length}" Item:Padding="0"/></rdf:li>'
+            if gainmap_length else ""
+        )
         directory = (
             "<Container:Directory><rdf:Seq>"
             '<rdf:li rdf:parseType="Resource"><Container:Item '
             'Item:Mime="image/jpeg" Item:Semantic="Primary" Item:Length="0" '
             f'Item:Padding="{padding}"/></rdf:li>'
+            f'{gainmap_item}'
             '<rdf:li rdf:parseType="Resource"><Container:Item '
             'Item:Mime="video/mp4" Item:Semantic="MotionPhoto" '
             f'Item:Length="{video_length}" Item:Padding="0"/></rdf:li>'
@@ -646,6 +692,227 @@ def _transcode_cover(
     )
 
 
+def _transcode_hdr_cover(
+    source: Path,
+    output: Path,
+    target: tuple[int, int],
+    options: BuildOptions,
+) -> int:
+    """Encode a HLG/PQ still as JPEG_R; return its gain-map JPEG length."""
+    encoder = _ultrahdr_executable()
+    if encoder is None:
+        raise ForgeError("HDR 封面需要 Google libultrahdr 的 ultrahdr_app")
+    if _is_ultrahdr(source):
+        if options.cover_rotation:
+            raise ForgeError("Ultra HDR 封面暂不支持旋转；请上传已旋转的原图")
+        tags = _exif_json(source, "-MPImageStart", "-MPImageLength", "-NumberOfImages")
+        gainmap_length = int(tags["MPImageLength"])
+        photo_length = int(tags["MPImageStart"]) + gainmap_length
+        if int(tags.get("NumberOfImages", 0)) != 2 or photo_length > source.stat().st_size:
+            raise ForgeError("Ultra HDR 封面中的增益图结构无效")
+        with source.open("rb") as handle:
+            output.write_bytes(handle.read(photo_length))
+        return gainmap_length
+    if _has_heif_gainmap(source):
+        return _transcode_heif_gainmap(source, output, target, options, encoder)
+    colors = _hdr_colors(source)
+    if colors is None:
+        raise ForgeError("HDR cover source has no HLG or PQ color metadata")
+    with tempfile.TemporaryDirectory(prefix="wechat-hdr-cover-") as td:
+        raw = Path(td) / "cover.p010"
+        filters = _rotation_filter(options.cover_rotation)
+        filters.append(_sizing_filter(*target, options.crop_mode))
+        command = ["ffmpeg", "-y", "-v", "error",
+            "-i", str(source), "-vf", ",".join(filters), "-frames:v", "1",
+            "-pix_fmt", "p010le", "-f", "rawvideo", str(raw),
+        ]
+        _run(command)
+        transfer = "1" if colors[1] == "arib-std-b67" else "2"
+        _run([
+            encoder, "-m", "0", "-p", str(raw),
+            "-w", str(target[0]), "-h", str(target[1]),
+            "-a", "0", "-C", "2", "-t", transfer,
+            "-q", "95", "-z", str(output),
+        ])
+    probe = _run([encoder, "-m", "1", "-j", str(output), "-P"], capture=True)
+    if "Ultra HDR Image: Yes" not in probe:
+        raise ForgeError("Ultra HDR cover validation failed")
+    tags = _exif_json(output, "-MPImageLength", "-NumberOfImages")
+    if int(tags.get("NumberOfImages", 0)) != 2:
+        raise ForgeError("Ultra HDR gain map is missing")
+    return int(tags["MPImageLength"])
+
+
+def _has_heif_gainmap(path: Path) -> bool:
+    if path.suffix.lower() not in {".heic", ".heif", ".avif"}:
+        return False
+    with path.open("rb") as handle:
+        header = handle.read(2 * 1024 * 1024)
+    possible = (
+        b"urn:com:apple:photo:2020:aux:hdrgainmap" in header
+        or b"tmap" in header[:64]
+        or b"urn:iso:std:iso:ts:21496" in header
+    )
+    if not possible:
+        return False
+    try:
+        import pylibheif
+        from pylibheif import gain_map
+    except ImportError as exc:
+        raise ForgeError(
+            "HDR HEIC/AVIF 封面需要安装项目的 heic-hdr 可选依赖"
+        ) from exc
+    try:
+        with pylibheif.HeifContext() as context:
+            context.read_from_file(str(path))
+            found = gain_map.extract_gain_map(context.get_primary_image_handle())
+    except Exception as exc:
+        raise ForgeError("无法读取 HDR HEIC/AVIF 封面的增益图") from exc
+    if found is None:
+        encoder = _ultrahdr_executable()
+        if encoder is None:
+            raise ForgeError("HDR HEIC/AVIF 封面需要 Google libultrahdr 的 ultrahdr_app")
+        probe = subprocess.run(
+            [encoder, "-m", "1", "-j", str(path), "-P"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if probe.returncode != 0 or "Ultra HDR Image: Yes" not in probe.stdout:
+            raise ForgeError("该 HDR HEIC/AVIF 的增益图格式暂不受解码器支持")
+    return True
+
+
+def _transcode_heif_gainmap(
+    source: Path,
+    output: Path,
+    target: tuple[int, int],
+    options: BuildOptions,
+    encoder: str,
+) -> int:
+    import numpy as np
+    import pylibheif
+    from PIL import Image, ImageOps
+    from pylibheif import gain_map
+
+    with pylibheif.HeifContext() as context:
+        context.read_from_file(str(source))
+        mapped = gain_map.extract_gain_map(context.get_primary_image_handle())
+        pq = mapped.reconstruct(output_format="pq") if mapped is not None else None
+    pylibheif.register_pillow_opener()
+    with Image.open(source) as image:
+        base = image.convert("RGB")
+        icc = image.info.get("icc_profile")
+        if pq is not None and base.size != (pq.shape[1], pq.shape[0]):
+            base = ImageOps.exif_transpose(image).convert("RGB")
+    if pq is not None and base.size != (pq.shape[1], pq.shape[0]):
+        raise ForgeError("HDR HEIC/AVIF 主图与增益图尺寸不一致")
+    turns = (options.cover_rotation % 360) // 90
+    with tempfile.TemporaryDirectory(prefix="wechat-heif-hdr-") as td:
+        temp = Path(td)
+        raw = temp / "hdr.rgba1010102"
+        sdr = temp / "sdr.jpg"
+        if pq is None:
+            _run([
+                encoder, "-m", "1", "-j", str(source),
+                "-o", "2", "-O", "5", "-z", str(raw),
+            ])
+            if raw.stat().st_size != base.width * base.height * 4:
+                raise ForgeError("HDR HEIC/AVIF 主图与增益图尺寸不一致")
+            packed = np.fromfile(raw, dtype="<u4").reshape(base.height, base.width)
+        else:
+            channels = pq.astype(np.uint32)
+            packed = (
+                channels[:, :, 0]
+                | (channels[:, :, 1] << 10)
+                | (channels[:, :, 2] << 20)
+                | np.uint32(3 << 30)
+            ).astype("<u4")
+        if turns:
+            packed = np.rot90(packed, -turns)
+            base = base.rotate(-90 * turns, expand=True)
+        if base.size != target or (packed.shape[1], packed.shape[0]) != target:
+            raise ForgeError("HDR HEIC/AVIF 封面尺寸与目标不一致")
+        packed.tofile(raw)
+        base.save(sdr, "JPEG", quality=95, icc_profile=icc)
+        tags = _exif_json(source, "-ProfileDescription")
+        sdr_gamut = "1" if "P3" in str(tags.get("ProfileDescription", "")) else "0"
+        _run([
+            encoder, "-m", "0", "-p", str(raw), "-a", "5",
+            "-i", str(sdr), "-w", str(target[0]), "-h", str(target[1]),
+            "-C", "2", "-c", sdr_gamut, "-t", "2", "-z", str(output),
+        ])
+    if not _is_ultrahdr(output):
+        raise ForgeError("HDR HEIC/AVIF 封面转换后增益图无效")
+    tags = _exif_json(output, "-MPImageLength", "-NumberOfImages")
+    if int(tags.get("NumberOfImages", 0)) != 2:
+        raise ForgeError("HDR HEIC/AVIF 封面转换后缺少增益图")
+    return int(tags["MPImageLength"])
+
+
+def _is_ultrahdr(path: Path) -> bool:
+    if path.suffix.lower() not in {".jpg", ".jpeg"}:
+        return False
+    with path.open("rb") as handle:
+        header = handle.read(2 * 1024 * 1024)
+    possible = (
+        b"urn:iso:std:iso:ts:21496:-1" in header
+        or b"http://ns.adobe.com/hdr-gain-map/1.0/" in header
+        or b"http://ns.apple.com/HDRGainMap/1.0/" in header
+    )
+    if not possible:
+        return False
+    encoder = _ultrahdr_executable()
+    if encoder is None:
+        raise ForgeError("Ultra HDR 封面需要 Google libultrahdr 的 ultrahdr_app")
+    result = subprocess.run(
+        [encoder, "-m", "1", "-j", str(path), "-P"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    return result.returncode == 0 and "Ultra HDR Image: Yes" in result.stdout
+
+
+def _ultrahdr_executable() -> str | None:
+    installed = shutil.which("ultrahdr_app")
+    if installed:
+        return installed
+    bundled = Path(sys.executable).parent / "ultrahdr_app"
+    return str(bundled) if bundled.is_file() else None
+
+
+def extract_first_frame(
+    video: str | Path, output: str | Path, start: float = 0.0
+) -> None:
+    """Decode the first frame of the selected clip to a lossless PNG."""
+    if start < 0:
+        raise ForgeError("Start time must not be negative")
+    output = Path(output)
+    pixel_format = "rgb48be" if _hdr_colors(Path(video)) else "rgb24"
+    _run(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-ss",
+            f"{start:.6f}",
+            "-map",
+            "0:v:0",
+            "-frames:v",
+            "1",
+            "-an",
+            "-sn",
+            "-c:v",
+            "png",
+            "-pix_fmt",
+            pixel_format,
+            str(output),
+        ]
+    )
+    if not output.is_file() or output.stat().st_size == 0:
+        raise ForgeError("视频在所选开始时间没有可用画面")
+
+
 def _transcode_video(
     source: Path,
     output: Path,
@@ -654,6 +921,33 @@ def _transcode_video(
     duration: float,
     options: BuildOptions,
 ) -> None:
+    hdr_colors = _hdr_colors(source)
+    if hdr_colors and profile.video_codec != "hevc":
+        raise ForgeError("该机型模板使用 H.264，无法保留 HDR；请选用 HEVC 机型模板")
+    if (
+        hdr_colors
+        and profile.format in {"microvideo-v1", "motionphoto-v2"}
+        and options.start == 0
+        and options.duration is None
+        and options.video_rotation == 0
+    ):
+        probe = _ffprobe(source)
+        stream = next(
+            (item for item in probe["streams"] if item.get("codec_type") == "video"),
+            None,
+        )
+        formats = str(probe.get("format", {}).get("format_name", "")).split(",")
+        source_duration = float(probe.get("format", {}).get("duration") or 0)
+        if (
+            stream
+            and stream.get("codec_name") == "hevc"
+            and "mp4" in formats
+            and 0 < source_duration <= profile.video_duration + 0.5
+        ):
+            # Keep the original HEVC bitstream and MP4 metadata, including
+            # Dolby Vision RPU data that a resize or re-encode would discard.
+            shutil.copyfile(source, output)
+            return
     filters = _rotation_filter(options.video_rotation)
     filters.extend(
         [
@@ -665,6 +959,24 @@ def _transcode_video(
         ["-c:v", "libx265", "-tag:v", "hvc1"]
         if profile.video_codec == "hevc"
         else ["-c:v", "libx264", "-tag:v", "avc1"]
+    )
+    if hdr_colors:
+        codec_args += [
+            "-x265-params",
+            "colorprim=bt2020:transfer=" + hdr_colors[1]
+            + ":colormatrix=" + hdr_colors[2]
+            + (":range=full" if hdr_colors[3] == "pc" else ":range=limited"),
+        ]
+    color_args = (
+        [
+            "-pix_fmt", "yuv420p10le",
+            "-color_primaries", hdr_colors[0],
+            "-color_trc", hdr_colors[1],
+            "-colorspace", hdr_colors[2],
+            "-color_range", hdr_colors[3],
+        ]
+        if hdr_colors
+        else ["-pix_fmt", "yuv420p", "-color_range", "pc"]
     )
     _run(
         [
@@ -689,10 +1001,7 @@ def _transcode_video(
             str(options.crf),
             "-preset",
             "medium",
-            "-pix_fmt",
-            "yuv420p",
-            "-color_range",
-            "pc",
+            *color_args,
             "-c:a",
             "aac",
             "-b:a",
@@ -716,18 +1025,17 @@ def _write_metadata(
     width: int,
     height: int,
     profile: TemplateProfile,
+    preserve_gainmap: bool = False,
 ) -> None:
     shutil.copyfile(cover, output)
+    clear_tags = ["-XMP:all=", "-EXIF:all=", "-IPTC:all=", "-Photoshop:all="]
+    if not preserve_gainmap:
+        clear_tags.extend(["-MPF:all=", "-Trailer:all="])
     _run(
         [
             "exiftool",
             "-overwrite_original",
-            "-XMP:all=",
-            "-MPF:all=",
-            "-Trailer:all=",
-            "-EXIF:all=",
-            "-IPTC:all=",
-            "-Photoshop:all=",
+            *clear_tags,
             str(output),
         ]
     )
@@ -739,7 +1047,7 @@ def _write_metadata(
                 "-TagsFromFile",
                 str(template),
                 "-EXIF:all",
-                "-ICC_Profile",
+                *([] if preserve_gainmap else ["-ICC_Profile"]),
                 str(output),
             ]
         )
@@ -768,7 +1076,8 @@ def _write_metadata(
 
 
 def _validate_oplus(
-    output: Path, expected_video_length: int, trailer_length: int
+    output: Path, expected_video_length: int, trailer_length: int,
+    gainmap_length: int = 0,
 ) -> None:
     tags = _exif_json(
         output,
@@ -777,21 +1086,50 @@ def _validate_oplus(
         "-OLivePhotoVersion",
         "-VideoLength",
         "-DirectoryItemLength",
+        "-DirectoryItemSemantic",
         "-MPImageLength",
+        "-NumberOfImages",
     )
+    item_lengths = tags.get("DirectoryItemLength", -1)
+    if isinstance(item_lengths, list):
+        item_lengths = item_lengths[-1]
+    photo_length = output.stat().st_size - expected_video_length - trailer_length
+    if gainmap_length:
+        with output.open("rb") as handle:
+            handle.seek(photo_length)
+            video_header = handle.read(8)
+        file_layout_ok = photo_length > gainmap_length and video_header[4:8] == b"ftyp"
+    else:
+        file_layout_ok = (
+            int(tags.get("MPImageLength", -1)) == photo_length
+        )
     checks = {
         "Orientation": int(tags.get("Orientation", 0)) == 1,
         "MotionPhoto": int(tags.get("MotionPhoto", 0)) == 1,
         "OLivePhotoVersion": int(tags.get("OLivePhotoVersion", 0)) == 2,
         "VideoLength": int(tags.get("VideoLength", -1)) == expected_video_length,
-        "DirectoryItemLength": int(tags.get("DirectoryItemLength", -1))
+        "DirectoryItemLength": int(item_lengths)
         == expected_video_length + trailer_length,
-        "FileLayout": int(tags.get("MPImageLength", -1))
-        + expected_video_length
-        + trailer_length
-        == output.stat().st_size,
+        "FileLayout": file_layout_ok,
     }
     failed = [name for name, passed in checks.items() if not passed]
+    if gainmap_length:
+        lengths = tags.get("DirectoryItemLength", [])
+        semantics = tags.get("DirectoryItemSemantic", [])
+        if not isinstance(lengths, list) or not isinstance(semantics, list):
+            failed.append("GainMapDirectory")
+        elif (
+            semantics != ["Primary", "GainMap", "MotionPhoto"]
+            or [int(length) for length in lengths]
+            != [0, gainmap_length, expected_video_length + trailer_length]
+        ):
+            failed.append("GainMapDirectory")
+        if (
+            int(tags.get("NumberOfImages", 0)) != 2
+            or int(tags.get("MPImageLength", 0)) != gainmap_length
+            or not _is_ultrahdr(output)
+        ):
+            failed.append("GainMapDecode")
     if failed:
         raise ForgeError("Output validation failed: " + ", ".join(failed))
 
@@ -836,6 +1174,10 @@ def build_motion_photo(
     cover_target = _target_dimensions(
         source_width, source_height, profile.photo_width, profile.photo_height
     )
+    input_gainmapped = _is_ultrahdr(cover) or _has_heif_gainmap(cover)
+    if input_gainmapped:
+        # Keep the original paired base image and gain map intact.
+        cover_target = (source_width, source_height)
     video_target = _target_dimensions(
         source_width, source_height, profile.video_width, profile.video_height
     )
@@ -867,13 +1209,24 @@ def build_motion_photo(
         metadata_jpg = temp / "metadata.jpg"
         xmp_file = temp / "template.xmp"
         log("[1/4] Processing cover")
-        _transcode_cover(cover, cover_jpg, cover_target, options)
+        hdr_cover = not options.force_sdr_cover and (
+            input_gainmapped or _hdr_colors(cover) is not None
+        )
+        gainmap_length = (
+            _transcode_hdr_cover(cover, cover_jpg, cover_target, options)
+            if hdr_cover else 0
+        )
+        if not hdr_cover:
+            _transcode_cover(cover, cover_jpg, cover_target, options)
         log("[2/4] Processing motion video")
         _transcode_video(video, video_mp4, video_target, profile, duration, options)
         video_bytes = video_mp4.read_bytes()
         if profile.format == "oplus-v2":
             xmp_file.write_text(
-                _prepare_xmp(template, len(video_bytes), len(trailer), timestamp_us)
+                _prepare_xmp(
+                    template, len(video_bytes), len(trailer), timestamp_us,
+                    gainmap_length,
+                )
             )
             metadata_xmp: Path | None = xmp_file
         else:
@@ -887,21 +1240,25 @@ def build_motion_photo(
             cover_target[0],
             cover_target[1],
             profile,
+            preserve_gainmap=bool(gainmap_length),
         )
         jpeg = metadata_jpg.read_bytes()
         if profile.format == "oplus-v2":
-            probe_mpf = _build_mpf_segment(0)
-            mpf = _build_mpf_segment(len(jpeg) + len(probe_mpf))
-            insert_at = _app_insertion_point(jpeg)
-            output.write_bytes(
-                jpeg[:insert_at] + mpf + jpeg[insert_at:] + video_bytes + trailer
-            )
+            if gainmap_length:
+                output.write_bytes(jpeg + video_bytes + trailer)
+            else:
+                probe_mpf = _build_mpf_segment(0)
+                mpf = _build_mpf_segment(len(jpeg) + len(probe_mpf))
+                insert_at = _app_insertion_point(jpeg)
+                output.write_bytes(
+                    jpeg[:insert_at] + mpf + jpeg[insert_at:] + video_bytes + trailer
+                )
         else:
             trailer = _rewrite_honor_trailer(trailer, len(video_bytes))
             output.write_bytes(jpeg + video_bytes + trailer)
     log("[4/4] Validating output")
     if profile.format == "oplus-v2":
-        _validate_oplus(output, len(video_bytes), len(trailer))
+        _validate_oplus(output, len(video_bytes), len(trailer), gainmap_length)
     else:
         _validate_honor(output, len(video_bytes))
     return BuildResult(output, profile, len(video_bytes), len(trailer), _sha256(output))
@@ -940,6 +1297,9 @@ def build_motion_photo_from_profile(
     cover_target = _target_dimensions(
         source_width, source_height, profile.photo_width, profile.photo_height
     )
+    input_gainmapped = _is_ultrahdr(cover) or _has_heif_gainmap(cover)
+    if input_gainmapped:
+        cover_target = (source_width, source_height)
     video_target = _target_dimensions(
         source_width, source_height, profile.video_width, profile.video_height
     )
@@ -962,11 +1322,21 @@ def build_motion_photo_from_profile(
         metadata_jpg = temp / "metadata.jpg"
         xmp_file = temp / "profile.xmp"
         log("[1/4] Processing cover")
-        _transcode_cover(cover, cover_jpg, cover_target, options)
+        hdr_cover = not options.force_sdr_cover and (
+            input_gainmapped or _hdr_colors(cover) is not None
+        )
+        gainmap_length = (
+            _transcode_hdr_cover(cover, cover_jpg, cover_target, options)
+            if hdr_cover else 0
+        )
+        if not hdr_cover:
+            _transcode_cover(cover, cover_jpg, cover_target, options)
         log("[2/4] Processing motion video")
         _transcode_video(video, video_mp4, video_target, profile, duration, options)
         video_bytes = video_mp4.read_bytes()
-        xmp = _protocol_xmp(profile.format, len(video_bytes), timestamp_us)
+        xmp = _protocol_xmp(
+            profile.format, len(video_bytes), timestamp_us, gainmap_length
+        )
         metadata_xmp: Path | None = None
         if xmp is not None:
             xmp_file.write_text(xmp, encoding="utf-8")
@@ -980,6 +1350,7 @@ def build_motion_photo_from_profile(
             cover_target[0],
             cover_target[1],
             profile,
+            preserve_gainmap=bool(gainmap_length),
         )
         jpeg = metadata_jpg.read_bytes()
         trailer = b""
@@ -994,18 +1365,23 @@ def build_motion_photo_from_profile(
             )
             output.write_bytes(jpeg + video_bytes + trailer)
         elif profile.format == "oplus-open-v2":
-            probe_mpf = _build_mpf_segment(0)
-            mpf = _build_mpf_segment(len(jpeg) + len(probe_mpf))
-            insert_at = _app_insertion_point(jpeg)
-            output.write_bytes(
-                jpeg[:insert_at] + mpf + jpeg[insert_at:] + video_bytes
-            )
+            if gainmap_length:
+                output.write_bytes(jpeg + video_bytes)
+            else:
+                probe_mpf = _build_mpf_segment(0)
+                mpf = _build_mpf_segment(len(jpeg) + len(probe_mpf))
+                insert_at = _app_insertion_point(jpeg)
+                output.write_bytes(
+                    jpeg[:insert_at] + mpf + jpeg[insert_at:] + video_bytes
+                )
         else:
             output.write_bytes(jpeg + video_bytes)
     log("[4/4] Validating output")
     submission = inspect_motion_photo_submission(output)
     if submission.video_length != len(video_bytes):
         raise ForgeError("Output validation failed: VideoLength")
+    if gainmap_length and not _is_ultrahdr(output):
+        raise ForgeError("Output validation failed: GainMapDecode")
     output_data = output.read_bytes()
     if profile.format == "samsung-sef-v106" and not output_data.endswith(b"SEFT"):
         raise ForgeError("Output validation failed: SamsungSEF")

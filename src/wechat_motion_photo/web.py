@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import plistlib
 import re
 import shutil
 import socket
@@ -24,6 +25,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
+from .apple_export import build_apple_live_pair
 from .core import (
     BuildOptions,
     ForgeError,
@@ -32,29 +34,41 @@ from .core import (
     build_motion_photo,
     build_motion_photo_from_profile,
     check_dependencies,
+    extract_first_frame,
+    _hdr_colors,
     inspect_motion_photo_submission,
     inspect_template,
 )
 
-STATIC_DIR = Path(__file__).with_name("static")
+_bundled_static_dir = Path(__file__).with_name("static")
+_deployment_static_dir = Path(__file__).resolve().parents[2] / ".deployment-webui"
+if os.environ.get("WECHAT_LIVE_STATIC_DIR"):
+    STATIC_DIR = Path(os.environ["WECHAT_LIVE_STATIC_DIR"]).expanduser().resolve()
+elif (_deployment_static_dir / "index.html").is_file():
+    STATIC_DIR = _deployment_static_dir
+else:
+    STATIC_DIR = _bundled_static_dir
 TEMPLATE_DIR = Path(__file__).with_name("templates")
 USER_TEMPLATE_DIR = Path(
     os.environ.get(
         "WECHAT_LIVE_TEMPLATE_DIR", str(Path(__file__).resolve().parents[2] / "template")
     )
 )
+APPLE_IOS_TEMPLATE_ID = "apple-live-ios-direct"
+APPLE_TEMPLATE_ID = "apple-live-mac-experimental"
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ARCHIVE_FILES = 500
 BUILTIN_TEMPLATES = {
     "realme-gt-neo5-240w": {
-        "label": "realme GT Neo5 240W",
+        "label": "Realme (GT Neo5 240W)",
         "path": TEMPLATE_DIR / "realme-gt-neo5-240w.jpg",
     },
     "honor-eli-an00": {
-        "label": "HONOR ELI-AN00",
+        "label": "HONOR (ELI-AN00)",
         "path": TEMPLATE_DIR / "honor-eli-an00.jpg",
     }
 }
+
 
 # These entries are generated from public format specifications and open-source
 # implementations.  They intentionally do not contain or impersonate a user's
@@ -83,11 +97,11 @@ OPEN_PROTOCOL_PROFILES = {
 }
 
 OPEN_PROTOCOL_LABELS = {
-    "google-pixel-2": "Google Pixel 2",
-    "redmi-k70-ultra": "Redmi K70 Ultra",
-    "samsung-galaxy-s7": "Samsung Galaxy S7",
-    "oppo-find-x7-ultra": "OPPO Find X7 Ultra",
-    "huawei-mate-80": "HUAWEI Mate 80",
+    "google-pixel-2": "Google (Pixel 2)",
+    "redmi-k70-ultra": "Redmi (K70 Ultra)",
+    "samsung-galaxy-s7": "Samsung (Galaxy S7)",
+    "oppo-find-x7-ultra": "OPPO (Find X7 Ultra)",
+    "huawei-mate-80": "HUAWEI (Mate 80)",
 }
 
 app = FastAPI(title="微信实况照片封装器", docs_url=None, redoc_url=None)
@@ -130,6 +144,8 @@ def _template_catalog() -> list[dict[str, str]]:
         {"id": template_id, "label": str(item["label"])}
         for template_id, item in BUILTIN_TEMPLATES.items()
     ]
+    items.append({"id": APPLE_IOS_TEMPLATE_ID, "label": "iOS / iPadOS · 直接导入", "source": "apple-ios"})
+    items.append({"id": APPLE_TEMPLATE_ID, "label": "Apple Live Photo · Mac 中转（备用）", "source": "apple-experimental"})
     items.extend(
         {
             "id": template_id,
@@ -323,6 +339,11 @@ async def inspect(
     template: Annotated[UploadFile | None, File()] = None,
     template_id: Annotated[str, Form()] = "",
 ) -> dict[str, object]:
+    if template_id in {APPLE_IOS_TEMPLATE_ID, APPLE_TEMPLATE_ID}:
+        if template is not None:
+            await template.close()
+        model = "iOS / iPadOS · 直接导入" if template_id == APPLE_IOS_TEMPLATE_ID else "Live Photo · Mac 中转"
+        return {"make": "Apple", "model": model, "video_codec": "source", "video_duration": 3.0, "trailer_length": 0}
     work = Path(tempfile.mkdtemp(prefix="wechat-live-inspect-"))
     try:
         target = await _resolve_template(template, template_id, work)
@@ -340,8 +361,8 @@ async def inspect(
 
 @app.post("/api/convert")
 async def convert(
-    cover: Annotated[UploadFile, File()],
     video: Annotated[UploadFile, File()],
+    cover: Annotated[UploadFile | None, File()] = None,
     template: Annotated[UploadFile | None, File()] = None,
     template_id: Annotated[str, Form()] = "",
     start: Annotated[float, Form()] = 0.0,
@@ -354,19 +375,69 @@ async def convert(
 ) -> FileResponse:
     work = Path(tempfile.mkdtemp(prefix="wechat-live-web-"))
     try:
+        if template_id in {APPLE_IOS_TEMPLATE_ID, APPLE_TEMPLATE_ID}:
+            if template is not None:
+                await template.close()
+            video_path = work / f"video{_suffix(video, '.mp4')}"
+            await _save_upload(video, video_path)
+            cover_path = None
+            if cover is not None and cover.filename:
+                cover_path = work / f"cover{_suffix(cover, '.jpg')}"
+                await _save_upload(cover, cover_path)
+            elif cover is not None:
+                await cover.close()
+            ios_direct = template_id == APPLE_IOS_TEMPLATE_ID
+            builder = partial(
+                build_apple_live_pair, video=video_path, cover=cover_path, work=work,
+                start=start, duration=float(duration) if duration.strip() else None,
+                key_time=float(key_time) if key_time.strip() else None,
+                preserve_hdr_still=ios_direct,
+            )
+            still, movie = await anyio.to_thread.run_sync(builder)
+            filename = "apple-live-photo.pvt.zip" if ios_direct else "apple-live-photo.zip"
+            download_path = work / filename
+            with zipfile.ZipFile(download_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+                if ios_direct:
+                    package = f"{still.stem}.pvt/"
+                    bundle.writestr(package, b"")
+                    bundle.write(still, arcname=package + still.name)
+                    bundle.write(movie, arcname=package + movie.name)
+                    bundle.writestr(
+                        package + "metadata.plist",
+                        plistlib.dumps({"PFVideoComplementMetadataVersionKey": "1"}),
+                    )
+                else:
+                    bundle.write(still, arcname=still.name)
+                    bundle.write(movie, arcname=movie.name)
+            return FileResponse(
+                download_path, media_type="application/zip", filename=filename,
+                background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
+            )
         template_target = await _resolve_template(template, template_id, work)
-        cover_path = work / f"cover{_suffix(cover, '.jpg')}"
         video_path = work / f"video{_suffix(video, '.mp4')}"
         output_path = work / "motion-photo.jpg"
-        await _save_upload(cover, cover_path)
         await _save_upload(video, video_path)
+        has_cover = cover is not None and bool(cover.filename)
+        if has_cover:
+            cover_path = work / f"cover{_suffix(cover, '.jpg')}"
+            await _save_upload(cover, cover_path)
+        else:
+            if cover is not None:
+                await cover.close()
+            cover_path = work / "cover-from-video.png"
+            await anyio.to_thread.run_sync(
+                extract_first_frame, video_path, cover_path, start
+            )
         options = BuildOptions(
             start=start,
             duration=float(duration) if duration.strip() else None,
-            key_time=float(key_time) if key_time.strip() else None,
+            key_time=(
+                float(key_time) if key_time.strip() else (0.0 if not has_cover else None)
+            ),
             crop_mode=crop_mode,
             cover_rotation=cover_rotation,
             video_rotation=video_rotation,
+            force_sdr_cover=not has_cover,
         )
         if isinstance(template_target, TemplateProfile):
             builder = partial(

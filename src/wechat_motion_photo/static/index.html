@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="把封面与视频封装为便于传输与使用的动态照片。">
-  <title>微信实况照片封装器</title>
-  <link rel="stylesheet" href="/styles.css?v=5">
+  <meta name="description" content="上传视频生成安卓或苹果实况照片，可自行添加封面。">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>实况照片封装器 · Motion Photo Forge</title>
+  <link rel="stylesheet" href="/styles.css?v=10">
 </head>
 <body>
   <header class="site-header">
@@ -18,8 +19,8 @@
 
   <main>
     <section class="intro" aria-labelledby="page-title">
-      <h1 id="page-title">简单一键生成动态实况照片，可发小红书、朋友圈</h1>
-      <p>选择已有手机模板，添加封面与短视频，即可完成封装。</p>
+      <h1 id="page-title">生成实况照片</h1>
+      <p>选择安卓机型或苹果平台，上传视频并按需添加封面。</p>
     </section>
 
     <div class="workspace">
@@ -27,7 +28,7 @@
         <div class="file-list">
           <div class="file-row template-row">
             <span class="step">1</span>
-            <span class="file-copy"><strong>选择手机模板</strong><small>可使用目前已有机型模板</small></span>
+            <span class="file-copy"><strong>选择手机或平台</strong><small>选择 iOS/iPadOS 或已有机型模板</small></span>
             <span class="template-controls">
               <label class="select-control"><span class="sr-only">模板来源</span><select id="template-choice" name="template_id" aria-label="模板来源"><option value="" disabled>正在加载模板…</option></select></label>
               <button id="open-template-upload" class="secondary" type="button">上传您的机型模板</button>
@@ -35,8 +36,8 @@
           </div>
           <label class="file-row" for="cover" data-drop-target="cover">
             <span class="step">2</span>
-            <span class="file-copy"><strong>封面图片</strong><small>拖入图片，或点击右侧选择</small></span>
-            <span class="file-action"><span data-filename="cover">选择图片</span><input id="cover" name="cover" type="file" accept="image/*,.heic,.heif" required></span>
+            <span class="file-copy"><strong>封面图片（可选）</strong><small id="cover-hint">不上传则使用视频首帧</small></span>
+            <span class="file-action"><span data-filename="cover">选择图片</span><input id="cover" name="cover" type="file" accept="image/*,.heic,.heif"></span>
           </label>
           <label class="file-row" for="video" data-drop-target="video">
             <span class="step">3</span>
@@ -49,11 +50,11 @@
           <summary>高级设置</summary>
           <div class="option-grid">
             <label>开始时间（秒）<input name="start" type="number" min="0" step="0.1" value="0"></label>
-            <label>生成时长（秒）<input name="duration" type="number" min="0.1" step="0.1" placeholder="跟随模板"></label>
-            <label>封面时间（秒）<input name="key_time" type="number" min="0" step="0.1" placeholder="跟随模板"></label>
-            <label>画面适配<select name="crop_mode"><option value="crop">铺满并裁切</option><option value="fit">完整保留（黑边）</option></select></label>
-            <label>封面旋转<select name="cover_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
-            <label>视频旋转<select name="video_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
+            <label>生成时长（秒）<input id="duration-input" name="duration" type="number" min="0.1" step="0.1" placeholder="跟随模板"></label>
+            <label>封面时间（秒）<input id="key-time-input" name="key_time" type="number" min="0" step="0.1" placeholder="跟随模板"></label>
+            <label data-android-only>画面适配<select name="crop_mode"><option value="crop">铺满并裁切</option><option value="fit">完整保留（黑边）</option></select></label>
+            <label data-android-only>封面旋转<select name="cover_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
+            <label data-android-only>视频旋转<select name="video_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
             <label class="checkbox-option"><input id="zip-output" name="zip_output" type="checkbox" value="true" checked><span><strong>输出 ZIP 压缩包</strong><small>关闭后直接下载 JPG</small></span></label>
           </div>
         </details>
@@ -71,13 +72,31 @@
           <div><dt>视频</dt><dd id="video-value">—</dd></div>
           <div><dt>厂商尾块</dt><dd id="trailer-value">—</dd></div>
         </dl>
-        <div class="transfer-note">
+        <button id="show-apple-guide" class="guide-reopen" type="button" hidden>查看 Apple 导入步骤 <span aria-hidden="true">↗</span></button>
+        <div id="android-transfer-note" class="transfer-note">
           <strong>生成后如何使用</strong>
           <p>默认生成含有动态图片的压缩包，从而保证您在使用微信等工具传输时不会丢失原信息，待传输完毕后再在新设备上解压该压缩包即可。</p>
         </div>
       </aside>
     </div>
   </main>
+
+  <aside id="apple-guide" class="apple-guide" role="dialog" aria-modal="false" aria-labelledby="apple-guide-title" hidden>
+    <div class="guide-topline"><span class="guide-live" aria-hidden="true"><span></span><span></span><span></span></span><span id="apple-guide-kicker">APPLE LIVE PHOTO</span><button id="close-apple-guide" class="guide-close" type="button" aria-label="关闭导入提示">×</button></div>
+    <h2 id="apple-guide-title">导入到 iPhone / iPad</h2>
+    <p id="apple-guide-lead" class="guide-lead">先保留下载，再解压 ZIP，最后打开 PVT 保存到照片。</p>
+    <ol id="apple-ios-steps" class="guide-steps">
+      <li><span>01</span><div><strong>保留下载</strong><p>在「文件」中找到下载的 .pvt.zip，先选择“保留下载”，等待文件下载完成。</p></div></li>
+      <li><span>02</span><div><strong>长按 ZIP 解压缩</strong><p>长按该 ZIP 文件，选择“解压缩”，得到 .pvt 实况包。</p></div></li>
+      <li><span>03</span><div><strong>打开 PVT，保存到照片</strong><p>单击 .pvt 文件，点其中的“保存到照片”。随后在「照片」中打开，确认 LIVE 标志并长按播放。</p></div></li>
+    </ol>
+    <ol id="apple-mac-steps" class="guide-steps" hidden>
+      <li><span>01</span><div><strong>在 Mac 解压</strong><p>下载 ZIP，得到配对的 JPG 与 MOV。</p></div></li>
+      <li><span>02</span><div><strong>一起导入「照片」</strong><p>同时选择两个文件，导入 Mac「照片」。</p></div></li>
+      <li><span>03</span><div><strong>同步到设备</strong><p>通过 iCloud 照片或从 Mac「照片」隔空投送。</p></div></li>
+    </ol>
+    <p id="apple-guide-foot" class="guide-foot">HDR 视频不上传封面时，自动取首帧生成 HDR HEIC。若直接导入不成功，可选 Mac 中转备用。</p>
+  </aside>
 
   <dialog id="template-upload-dialog" aria-labelledby="template-upload-title">
     <form id="template-upload-form" class="dialog-card">
@@ -106,13 +125,8 @@
     <nav class="project-links" aria-label="项目与作者">
       <a href="https://github.com/Hronrad/motion-photo-forge" target="_blank" rel="noopener noreferrer">项目源码 <span aria-hidden="true">↗</span></a>
       <a href="https://github.com/Hronrad" target="_blank" rel="noopener noreferrer">GitHub · Hronrad <span aria-hidden="true">↗</span></a>
-      <a class="star-link" href="https://github.com/Hronrad/motion-photo-forge" target="_blank" rel="noopener noreferrer" aria-label="如果这个工具对您有用，请到 GitHub 为项目点个 Star">
-        <span class="star-icon" aria-hidden="true">★</span>
-        <span>有用的话，点个 Star</span>
-        <span class="star-arrow" aria-hidden="true">↗</span>
-      </a>
     </nav>
   </footer>
-  <script src="/app.js?v=7" defer></script>
+  <script src="/app.js?v=18" defer></script>
 </body>
 </html>

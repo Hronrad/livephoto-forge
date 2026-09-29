@@ -14,7 +14,11 @@ dependencies = [
   "fastapi>=0.115",
   "python-multipart>=0.0.18",
   "uvicorn>=0.32",
+  "Pillow>=10",
 ]
+
+[project.optional-dependencies]
+heic-hdr = ["pylibheif>=1.25,<2", "numpy>=1.26", "Pillow>=10"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",

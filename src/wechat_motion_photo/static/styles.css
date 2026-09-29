@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 :root {
   color-scheme: light;
   --bg: oklch(1 0 0);
@@ -99,6 +100,23 @@ input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-v
 .transfer-note { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
 .transfer-note strong { font-size: 14px; }
 .transfer-note p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.guide-reopen { width: 100%; margin-top: 24px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--primary); font-weight: 650; text-align: left; cursor: pointer; }
+.apple-guide { position: fixed; z-index: 40; right: 16px; bottom: 16px; width: min(390px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); box-shadow: 0 8px 24px oklch(.2 .02 270 / .17); }
+.guide-topline { display: flex; align-items: center; gap: 9px; color: var(--primary); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
+.guide-live { position: relative; width: 22px; height: 22px; display: grid; place-items: center; }
+.guide-live span { position: absolute; border: 1.5px solid currentColor; border-radius: 50%; }
+.guide-live span:nth-child(1) { width: 7px; height: 7px; background: currentColor; }
+.guide-live span:nth-child(2) { width: 14px; height: 14px; }
+.guide-live span:nth-child(3) { width: 22px; height: 22px; opacity: .5; }
+.guide-close { margin-left: auto; width: 34px; height: 34px; border: 0; background: var(--surface); border-radius: 50%; color: var(--ink); font-size: 22px; cursor: pointer; }
+.apple-guide h2 { margin: 12px 0 0; font-size: 1.25rem; }
+.guide-lead { margin: 8px 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.guide-steps { margin: 0; padding: 0; list-style: none; }
+.guide-steps li { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.guide-steps li > span { flex: 0 0 25px; color: var(--primary); font-size: 12px; font-weight: 750; }
+.guide-steps strong { font-size: 14px; }
+.guide-steps p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.guide-foot { margin: 12px 0 0; padding: 10px; border-radius: 7px; background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1.5; }
 code { padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--ink); }
 .site-footer { max-width: 1120px; margin: 0 auto; padding: 22px 24px 34px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .privacy-note { margin: 0 0 15px; line-height: 1.5; }
@@ -152,16 +170,22 @@ dialog[open] { animation: dialog-in 180ms cubic-bezier(.22, 1, .36, 1); }
 }
 @media (max-width: 560px) {
   .site-header, main, footer { padding-left: 16px; padding-right: 16px; }
+  main { padding-top: 32px; }
+  .intro { margin-bottom: 28px; }
+  .intro > p:last-child { font-size: 15px; }
   .header-link { font-size: 12px; }
   .project-links { gap: 12px 18px; }
   .star-link { width: 100%; justify-content: center; }
-  .file-row { grid-template-columns: 32px minmax(0, 1fr); }
+  .file-row { grid-template-columns: 32px minmax(0, 1fr); padding: 16px; }
   h1 { font-size: 2rem; }
-  .file-action, .template-controls { grid-column: 2; width: 100%; max-width: none; min-width: 0; }
+  .file-action, .template-controls { grid-column: 1 / -1; width: 100%; max-width: none; min-width: 0; }
+  .file-action { min-height: 48px; }
+  .template-controls { margin-top: 2px; }
   .select-control select { min-width: 0; }
   .option-grid { grid-template-columns: 1fr; }
   .dialog-card { padding: 22px 18px; }
   .dialog-actions { flex-direction: column-reverse; }
   .dialog-actions .secondary, .dialog-primary { width: 100%; }
+  .apple-guide { left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: auto; max-height: min(68dvh, 560px); padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

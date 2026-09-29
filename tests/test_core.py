@@ -1,4 +1,8 @@
 import unittest
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 
 from wechat_motion_photo.core import (
     ForgeError,
@@ -12,6 +16,9 @@ from wechat_motion_photo.core import (
     _protocol_xmp,
     _rewrite_honor_trailer,
     _target_dimensions,
+    _transcode_hdr_cover,
+    _is_ultrahdr,
+    BuildOptions,
 )
 
 
@@ -85,6 +92,28 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(_replace_required(r'a="\d+"', 'a="2"', 'a="1"', "a"), 'a="2"')
         with self.assertRaises(ForgeError):
             _replace_required("missing", "x", "input", "missing")
+
+    @unittest.skipUnless(
+        all(shutil.which(name) for name in ("ffmpeg", "ffprobe", "exiftool", "ultrahdr_app")),
+        "HDR encoding tools are required",
+    )
+    def test_hlg_still_encodes_real_gain_map(self):
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "hlg.mp4"
+            output = Path(td) / "cover.jpg"
+            subprocess.run([
+                "ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+                "testsrc2=size=128x96:rate=1:duration=1", "-pix_fmt", "yuv420p10le",
+                "-color_primaries", "bt2020", "-color_trc", "arib-std-b67",
+                "-colorspace", "bt2020nc", "-c:v", "libx265", "-tag:v", "hvc1",
+                "-x265-params", "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc",
+                str(source),
+            ], check=True)
+            gainmap_length = _transcode_hdr_cover(
+                source, output, (128, 96), BuildOptions()
+            )
+            self.assertGreater(gainmap_length, 0)
+            self.assertTrue(_is_ultrahdr(output))
 
 
 if __name__ == "__main__":
