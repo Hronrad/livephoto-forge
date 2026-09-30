@@ -189,3 +189,42 @@ dialog[open] { animation: dialog-in 180ms cubic-bezier(.22, 1, .36, 1); }
   .apple-guide { left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: auto; max-height: min(68dvh, 560px); padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+/* Apple workflow pagination */
+.guide-pager { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; }
+.guide-pager button { min-height:44px; padding:8px 12px; border:0; border-radius:10px; background:var(--primary); color:white; cursor:pointer; font-weight:650; }
+.guide-pager button:disabled { background:var(--surface); color:var(--muted); cursor:default; }
+.guide-pager button:focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+#guide-page-count { white-space:nowrap; font-size:13px; font-variant-numeric:tabular-nums; }
+.brand-en { margin-left:8px; font-size:12px; font-weight:500; color:var(--muted); }
+.hero-main { display:block; font-size:.67em; font-weight:550; line-height:1.7; }
+.hero-subject { margin-left:.25em; font-weight:800; font-size:1.42em; }
+.hero-secondary { display:flex; align-items:center; gap:.3em; margin-top:.12em; font-size:.72em; font-weight:500; }
+.hero-secondary em { font-style:normal; font-weight:800; color:var(--primary); }
+.hero-orbit { margin-left:.1em; color:var(--primary); font-size:1.4em; }
+@media (max-width:600px) { .brand-en { display:block; margin:2px 0 0 25px; font-size:10px; } .hero-main { font-size:.68em; } .hero-secondary { font-size:.72em; } }
+
+/* Prominent project support action */
+.project-links .star-link { min-height:52px; padding:12px 22px; border:0; background:var(--primary); color:white; font-size:16px; font-weight:750; gap:12px; text-decoration:none; }
+.project-links .star-link:hover, .project-links .star-link:focus-visible { background:var(--primary-hover); color:white; }
+.project-links .star-link:focus-visible { outline:2px solid var(--primary); outline-offset:4px; }
+.project-links .star-icon { color:inherit; font-size:23px; }
+@media (max-width:600px) { .project-links .star-link { padding:12px 14px; font-size:15px; } }
+
+/* Light glass support action and portrait guide clearance. */
+.project-links .star-link {
+ background:linear-gradient(125deg,oklch(1 0 0 / .78),oklch(.93 .035 265 / .65) 55%,oklch(.95 .025 210 / .7));
+ color:var(--primary); border:1px solid oklch(1 0 0 / .85);
+ backdrop-filter:blur(20px) saturate(1.4); -webkit-backdrop-filter:blur(20px) saturate(1.4);
+ box-shadow:inset 0 1px 0 white,0 3px 8px oklch(.3 .04 265 / .1);
+}
+.project-links .star-link:hover,.project-links .star-link:focus-visible {
+ color:var(--primary); background:linear-gradient(125deg,oklch(1 0 0 / .94),oklch(.9 .05 265 / .8),oklch(.94 .035 210 / .85));
+}
+@media (max-width:800px) and (orientation:portrait) {
+ .apple-guide {
+  position:relative; inset:auto; z-index:auto; width:auto;
+  margin:0 18px 24px; max-height:none; overflow:visible;
+  padding:20px 18px; border-radius:16px;
+ }
+}

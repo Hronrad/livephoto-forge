@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="上传视频生成安卓或苹果实况照片，可自行添加封面。">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <title>实况照片封装器 · Motion Photo Forge</title>
-  <link rel="stylesheet" href="/styles.css?v=10">
+  <title>实况照片封装器 · LivePhoto Forge</title>
+  <link rel="stylesheet" href="/styles.css?v=25">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="/" aria-label="微信实况照片封装器首页">
       <span class="brand-mark" aria-hidden="true">◉</span>
-      实况照片封装器
+      实况照片封装器 <span class="brand-en">LivePhoto Forge</span>
     </a>
     <a class="header-link" href="https://hronrad.cn/" target="_blank" rel="noopener noreferrer">Hronrad.cn <span aria-hidden="true">↗</span></a>
   </header>
@@ -50,7 +50,7 @@
           <summary>高级设置</summary>
           <div class="option-grid">
             <label>开始时间（秒）<input name="start" type="number" min="0" step="0.1" value="0"></label>
-            <label>生成时长（秒）<input id="duration-input" name="duration" type="number" min="0.1" step="0.1" placeholder="跟随模板"></label>
+            <label>生成时长（秒）<input id="duration-input" name="duration" type="number" max="3" min="0.1" step="0.1" placeholder="跟随模板"></label>
             <label>封面时间（秒）<input id="key-time-input" name="key_time" type="number" min="0" step="0.1" placeholder="跟随模板"></label>
             <label data-android-only>画面适配<select name="crop_mode"><option value="crop">铺满并裁切</option><option value="fit">完整保留（黑边）</option></select></label>
             <label data-android-only>封面旋转<select name="cover_rotation"><option>0</option><option>90</option><option>180</option><option>270</option></select></label>
@@ -83,18 +83,15 @@
 
   <aside id="apple-guide" class="apple-guide" role="dialog" aria-modal="false" aria-labelledby="apple-guide-title" hidden>
     <div class="guide-topline"><span class="guide-live" aria-hidden="true"><span></span><span></span><span></span></span><span id="apple-guide-kicker">APPLE LIVE PHOTO</span><button id="close-apple-guide" class="guide-close" type="button" aria-label="关闭导入提示">×</button></div>
-    <h2 id="apple-guide-title">导入到 iPhone / iPad</h2>
+    <h2 id="apple-guide-title">苹果无损转换全流程</h2>
     <p id="apple-guide-lead" class="guide-lead">先保留下载，再解压 ZIP，最后打开 PVT 保存到照片。</p>
-    <ol id="apple-ios-steps" class="guide-steps">
-      <li><span>01</span><div><strong>保留下载</strong><p>在「文件」中找到下载的 .pvt.zip，先选择“保留下载”，等待文件下载完成。</p></div></li>
-      <li><span>02</span><div><strong>长按 ZIP 解压缩</strong><p>长按该 ZIP 文件，选择“解压缩”，得到 .pvt 实况包。</p></div></li>
-      <li><span>03</span><div><strong>打开 PVT，保存到照片</strong><p>单击 .pvt 文件，点其中的“保存到照片”。随后在「照片」中打开，确认 LIVE 标志并长按播放。</p></div></li>
-    </ol>
+    <ol id="apple-upload-steps" class="guide-steps" ><li><span>01</span><div><strong>先把原片存入「文件」</strong><p>将源文件直接保存在文件系统；若素材在「照片」中，选择“导出未修改的原片”，导出到「文件」。</p></div></li><li><span>02</span><div><strong>通过“选择文件”上传</strong><p>上传时选择“选择文件”（或“浏览”），选取「文件」中的源文件，而非“照片图库”中的内容，避免系统在选取时转码。</p></div></li></ol><ol id="apple-ios-steps" class="guide-steps" hidden><li><span>01</span><div><strong>保留下载，再解压缩</strong><p>对 ZIP 选择“保留下载”，等待完成；再长按 ZIP，选择“解压缩”。</p></div></li><li><span>02</span><div><strong>打开 PVT，先确认能播放</strong><p>单击 .pvt 文件，先长按画面，确认它是可以播放的 Live 实况图片。</p></div></li><li><span>03</span><div><strong>确认后再存入「照片」</strong><p>确认播放正常后，再点击“存储/保存到「照片」”。</p><p class="guide-size-note">「照片」中显示的文件大小可能只是封面图片大小，并不代表实况视频被压缩；视频仍保留原始画质。可选择<strong>“导出未修改的原片”</strong>，保存到「文件」，查看图片与视频原文件以验证。</p></div></li></ol>
     <ol id="apple-mac-steps" class="guide-steps" hidden>
       <li><span>01</span><div><strong>在 Mac 解压</strong><p>下载 ZIP，得到配对的 JPG 与 MOV。</p></div></li>
       <li><span>02</span><div><strong>一起导入「照片」</strong><p>同时选择两个文件，导入 Mac「照片」。</p></div></li>
       <li><span>03</span><div><strong>同步到设备</strong><p>通过 iCloud 照片或从 Mac「照片」隔空投送。</p></div></li>
     </ol>
+<nav id="guide-pager" class="guide-pager" aria-label="指引翻页"><button id="guide-prev" type="button">第一步(上传)</button><span id="guide-page-count" aria-live="polite">1 / 2</span><button id="guide-next" type="button">第二步(导出)</button></nav>
     <p id="apple-guide-foot" class="guide-foot">HDR 视频不上传封面时，自动取首帧生成 HDR HEIC。若直接导入不成功，可选 Mac 中转备用。</p>
   </aside>
 
@@ -123,10 +120,9 @@
   <footer class="site-footer">
     <p class="privacy-note">转换素材在处理后删除</p>
     <nav class="project-links" aria-label="项目与作者">
-      <a href="https://github.com/Hronrad/motion-photo-forge" target="_blank" rel="noopener noreferrer">项目源码 <span aria-hidden="true">↗</span></a>
-      <a href="https://github.com/Hronrad" target="_blank" rel="noopener noreferrer">GitHub · Hronrad <span aria-hidden="true">↗</span></a>
+      <a href="https://github.com/Hronrad/livephoto-forge" target="_blank" rel="noopener noreferrer">项目源码 Github Page <span aria-hidden="true">↗</span></a>
     </nav>
   </footer>
-  <script src="/app.js?v=18" defer></script>
+  <script src="/app.js?v=20" defer></script>
 </body>
 </html>

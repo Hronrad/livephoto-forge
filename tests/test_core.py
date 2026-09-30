@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from wechat_motion_photo.core import (
+from livephoto_forge.core import (
     ForgeError,
     _app_insertion_point,
     _build_mpf_segment,

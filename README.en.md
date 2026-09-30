@@ -1,15 +1,15 @@
 <div align="center">
 
-# Motion Photo Forge
+# LivePhoto Forge
 
-[![Try online](docs/images/try-online.svg)](https://motion-photo.hronrad.cn/en/)
+[![Try online](docs/images/try-online.svg)](https://livephoto.hronrad.cn/en/)
 
-[![Android + Apple](docs/images/platforms.svg)](https://motion-photo.hronrad.cn/en/)
+[![Android + Apple](docs/images/platforms.svg)](https://livephoto.hronrad.cn/en/)
 [![Python 3.10+](docs/images/python.svg)](pyproject.toml)
 [![MIT](docs/images/license.svg)](LICENSE)
-[![Star on GitHub](docs/images/star.svg)](https://github.com/Hronrad/motion-photo-forge/stargazers)
+[![Star on GitHub](docs/images/star.svg)](https://github.com/Hronrad/livephoto-forge/stargazers)
 
-**[立即在线使用 · Open the live app →](https://motion-photo.hronrad.cn/en/)**
+**[立即在线使用 · Open the live app →](https://livephoto.hronrad.cn/en/)**
 
 [简体中文](README.md) · [English](README.en.md)
 
@@ -17,7 +17,7 @@
 
 Combine a cover image and video into a live photo losslessly, with support for Android and Apple devices. Compatible formats preserve the original video stream; device profiles that require different codecs or dimensions re-encode it.
 
-[![English live app on desktop](docs/images/webui-desktop-en.png)](https://motion-photo.hronrad.cn/en/)
+[![English live app on desktop](docs/images/webui-desktop-en.png)](https://livephoto.hronrad.cn/en/)
 
 <details>
 <summary>Mobile preview</summary>
@@ -55,3 +55,9 @@ Run tests with `python -m unittest discover -s tests -v`. Custom deployment asse
 The hosted app uploads media to the server for conversion; temporary conversion files are deleted after the response completes. Run locally to process files on your own machine.
 
 MIT licensed. Apple pairing metadata uses Yang Zhen's Apache-2.0 [video-to-live-photo](https://github.com/yangzhen-23/video-to-live-photo) implementation; see [licenses/](licenses/). Format references: [docs/research.md](docs/research.md).
+
+## Support the author
+
+If LivePhoto Forge helps you, a GitHub Star or a small contribution is always welcome. Your support helps cover hosting and continued development. Thank you!
+
+<p align="center"><img src="docs/images/support-hronrad.png" alt="Support Hronrad via Alipay" width="360"></p>

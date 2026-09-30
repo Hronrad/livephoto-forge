@@ -1,15 +1,15 @@
 <div align="center">
 
-# Motion Photo Forge
+# LivePhoto Forge
 
-[![Try online](docs/images/try-online.svg)](https://motion-photo.hronrad.cn/)
+[![Try online](docs/images/try-online.svg)](https://livephoto.hronrad.cn/)
 
-[![Android + Apple](docs/images/platforms.svg)](https://motion-photo.hronrad.cn/)
+[![Android + Apple](docs/images/platforms.svg)](https://livephoto.hronrad.cn/)
 [![Python 3.10+](docs/images/python.svg)](pyproject.toml)
 [![MIT](docs/images/license.svg)](LICENSE)
-[![Star on GitHub](docs/images/star.svg)](https://github.com/Hronrad/motion-photo-forge/stargazers)
+[![Star on GitHub](docs/images/star.svg)](https://github.com/Hronrad/livephoto-forge/stargazers)
 
-**[立即在线使用 · Open the live app →](https://motion-photo.hronrad.cn/)**
+**[立即在线使用 · Open the live app →](https://livephoto.hronrad.cn/)**
 
 [简体中文](README.md) · [English](README.en.md)
 
@@ -17,7 +17,7 @@
 
 无损将封面与视频合成实况图片，支持多种平台机型（安卓/苹果）。兼容格式可保留原视频流；需要适配编码或尺寸的机型会转码。
 
-[![在线部署版桌面界面](docs/images/webui-desktop.png)](https://motion-photo.hronrad.cn/)
+[![在线部署版桌面界面](docs/images/webui-desktop.png)](https://livephoto.hronrad.cn/)
 
 <details>
 <summary>查看移动端界面</summary>
@@ -55,3 +55,9 @@ HDR 图片处理另需 `ultrahdr_app`；HEIC/AVIF 使用 `pip install '.[heic-hd
 在线转换会将素材上传到服务器；转换临时文件在响应结束后删除。本机运行可在本地处理。
 
 MIT 许可证。Apple 配对元数据使用杨振的 [video-to-live-photo](https://github.com/yangzhen-23/video-to-live-photo) Apache-2.0 实现，见 [licenses/](licenses/)。格式资料见 [docs/research.md](docs/research.md)。
+
+## 支持作者
+
+如果 LivePhoto Forge 对你有用，欢迎点个 Star，也可以请作者喝杯咖啡，支持服务器运行和持续开发。每一份支持都很珍贵，谢谢你！
+
+<p align="center"><img src="docs/images/support-hronrad.png" alt="支付宝扫码支持 Hronrad" width="360"></p>

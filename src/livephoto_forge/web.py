@@ -415,7 +415,7 @@ async def convert(
             )
         template_target = await _resolve_template(template, template_id, work)
         video_path = work / f"video{_suffix(video, '.mp4')}"
-        output_path = work / "motion-photo.jpg"
+        output_path = work / "livephoto.jpg"
         await _save_upload(video, video_path)
         has_cover = cover is not None and bool(cover.filename)
         if has_cover:
@@ -468,17 +468,17 @@ async def convert(
             in {"microvideo-v1", "motionphoto-v2", "samsung-sef-v106"}
         )
         motion_filename = (
-            "MVIMG_motion_MP.jpg" if standard_android else "motion-photo.jpg"
+            "MVIMG_motion_MP.jpg" if standard_android else "livephoto.jpg"
         )
         filename = motion_filename
         if zip_output:
-            download_path = work / "motion-photo.zip"
+            download_path = work / "livephoto.zip"
             with zipfile.ZipFile(
                 download_path, "w", compression=zipfile.ZIP_DEFLATED
             ) as bundle:
                 bundle.write(output_path, arcname=motion_filename)
             media_type = "application/zip"
-            filename = "motion-photo.zip"
+            filename = "livephoto.zip"
         return FileResponse(
             download_path,
             media_type=media_type,

@@ -13,9 +13,9 @@ from unittest.mock import patch
 from fastapi import UploadFile
 from PIL import Image
 
-from wechat_motion_photo.apple_live import inspect_live_jpeg, inspect_live_mov
-from wechat_motion_photo.apple_hdr import inspect_live_hdr_heic
-from wechat_motion_photo.core import (
+from livephoto_forge.apple_live import inspect_live_jpeg, inspect_live_mov
+from livephoto_forge.apple_hdr import inspect_live_hdr_heic
+from livephoto_forge.core import (
     ForgeError,
     _extract_vendor_trailer,
     _is_ultrahdr,
@@ -24,7 +24,7 @@ from wechat_motion_photo.core import (
     inspect_motion_photo_submission,
     inspect_template,
 )
-from wechat_motion_photo.web import (
+from livephoto_forge.web import (
     APPLE_IOS_TEMPLATE_ID,
     APPLE_TEMPLATE_ID,
     BUILTIN_TEMPLATES,
@@ -170,9 +170,9 @@ class WebTests(unittest.TestCase):
             ))
             with zipfile.ZipFile(response.path) as bundle:
                 self.assertIsNone(bundle.testzip())
-                self.assertEqual(bundle.namelist(), ["motion-photo.jpg"])
-                photo = root / "motion-photo.jpg"
-                photo.write_bytes(bundle.read("motion-photo.jpg"))
+                self.assertEqual(bundle.namelist(), ["livephoto.jpg"])
+                photo = root / "livephoto.jpg"
+                photo.write_bytes(bundle.read("livephoto.jpg"))
             asyncio.run(response.background())
             self.assertFalse(_is_ultrahdr(photo))
             data = photo.read_bytes()
@@ -216,7 +216,7 @@ class WebTests(unittest.TestCase):
 
             self.assertEqual(decoded_rgb(frame), decoded_rgb(source, 0.5))
 
-            with patch("wechat_motion_photo.web.build_motion_photo_from_profile") as build:
+            with patch("livephoto_forge.web.build_motion_photo_from_profile") as build:
                 def fake_build(**kwargs):
                     self.assertEqual(kwargs["cover"].suffix, ".png")
                     self.assertEqual(decoded_rgb(kwargs["cover"]), decoded_rgb(source, 0.5))
@@ -277,7 +277,7 @@ class WebTests(unittest.TestCase):
         source = _builtin_template("honor-eli-an00")
         original = source.read_bytes()
         with tempfile.TemporaryDirectory() as td, patch(
-            "wechat_motion_photo.web.USER_TEMPLATE_DIR", Path(td)
+            "livephoto_forge.web.USER_TEMPLATE_DIR", Path(td)
         ):
             profile = inspect_motion_photo_submission(source)
             submission = _save_pending_submission(source, profile, "sample.jpg")

@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "wechat-motion-photo-forge"
+name = "livephoto-forge"
 version = "0.3.0"
 description = "Build OPLUS and HONOR Motion Photos from a cover, video, and native phone template."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
-authors = [{ name = "WeChat Motion Photo Forge contributors" }]
+authors = [{ name = "WeChat LivePhoto Forge contributors" }]
 dependencies = [
   "fastapi>=0.115",
   "python-multipart>=0.0.18",
@@ -17,8 +17,6 @@ dependencies = [
   "Pillow>=10",
 ]
 
-[project.optional-dependencies]
-heic-hdr = ["pylibheif>=1.25,<2", "numpy>=1.26", "Pillow>=10"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
@@ -28,9 +26,12 @@ classifiers = [
   "Topic :: Multimedia :: Video :: Conversion",
 ]
 
+[project.optional-dependencies]
+heic-hdr = ["pylibheif>=1.25,<2", "numpy>=1.26", "Pillow>=10"]
+
 [project.scripts]
-wechat-live = "wechat_motion_photo.cli:main"
-wechat-live-web = "wechat_motion_photo.web:main"
+wechat-live = "livephoto_forge.cli:main"
+wechat-live-web = "livephoto_forge.web:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/wechat_motion_photo"]
+packages = ["src/livephoto_forge"]

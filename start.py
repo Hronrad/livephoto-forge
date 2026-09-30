@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
 PYTHON = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-STAMP = VENV / ".wechat-motion-photo-installed"
+STAMP = VENV / ".wechat-livephoto-installed"
 
 
 def main() -> int:
@@ -28,7 +28,7 @@ def main() -> int:
         STAMP.touch()
     try:
         return subprocess.call(
-            [str(PYTHON), "-m", "wechat_motion_photo.web", *sys.argv[1:]]
+            [str(PYTHON), "-m", "livephoto_forge.web", *sys.argv[1:]]
         )
     except KeyboardInterrupt:
         return 0

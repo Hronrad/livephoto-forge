@@ -22,8 +22,25 @@ function appleMode() {
   return null;
 }
 
-function showAppleGuide() {
-  if (appleMode()) appleGuide.hidden = false;
+let guidePage = 0;
+function renderGuidePage() {
+  const mac = appleMode() === "mac";
+  guideTitle.textContent = mac ? '通过 Mac 中转导入' : '苹果无损转换全流程';
+  document.querySelector("#apple-upload-steps").hidden = mac || guidePage !== 0;
+  document.querySelector("#apple-ios-steps").hidden = mac || guidePage !== 1;
+  document.querySelector("#apple-mac-steps").hidden = !mac;
+  document.querySelector("#guide-pager").hidden = mac;
+  document.querySelector("#guide-prev").disabled = guidePage === 0;
+  document.querySelector("#guide-next").disabled = guidePage === 1;
+  document.querySelector("#guide-page-count").textContent = `${guidePage + 1} / 2`;
+  if (!mac) guideLead.textContent = guidePage === 0 ? '第一步 · 上传未经修改的原片' : '第二步 · 下载后先验证播放，再存入照片';
+}
+function showAppleGuide(page = guidePage) {
+  guidePage = typeof page === "number" ? page : guidePage;
+  if (appleMode()) { renderGuidePage(); appleGuide.hidden = false; }
+}
+for (const [id,page] of [["guide-prev",0],["guide-next",1]]) {
+ document.querySelector(`#${id}`).addEventListener("click", () => { showAppleGuide(page); appleGuide.scrollTop = 0; document.querySelector(page ? "#guide-prev" : "#guide-next").focus(); });
 }
 
 function updateTransferGuidance() {
@@ -36,7 +53,7 @@ function updateTransferGuidance() {
   document.querySelectorAll("[data-android-only]").forEach((control) => {
     control.hidden = Boolean(mode);
   });
-  document.querySelector("#duration-input").placeholder = mode ? "默认 3 秒，最长 3 秒" : "跟随模板";
+  document.querySelector("#duration-input").placeholder = "最长 3 秒";
   document.querySelector("#key-time-input").placeholder = mode ? "默认首帧" : "跟随模板";
   coverHint.textContent = mode === "ios"
     ? "留空可从 HDR 视频自动生成 HDR HEIC 封面"
@@ -56,7 +73,7 @@ function updateTransferGuidance() {
   guideFoot.textContent = mac
     ? "请在 Mac「照片」中同时导入两个文件；在 iPhone/iPad 中分别保存会得到两个独立项目。"
     : "HDR 视频不上传封面时，自动取首帧生成 HDR HEIC。若直接导入不成功，可选 Mac 中转备用。";
-  showAppleGuide();
+  showAppleGuide(0);
 }
 const zipOutput = document.querySelector("#zip-output");
 const templateDialog = document.querySelector("#template-upload-dialog");
@@ -87,7 +104,7 @@ function fileLabel(input) {
 
 function renderTemplate(profile) {
   document.querySelector("#device-value").textContent = `${profile.make} ${profile.model}`;
-  document.querySelector("#video-value").textContent = `${profile.video_codec.toUpperCase()} · ${profile.video_duration.toFixed(2)} 秒`;
+  document.querySelector("#video-value").textContent = `${profile.video_codec.toUpperCase()} · ${Math.min(3, profile.video_duration)} 秒`;
   document.querySelector("#trailer-value").textContent = `${profile.trailer_length} B`;
   templateInfo.hidden = false;
 }
@@ -280,14 +297,13 @@ form.addEventListener("submit", async (event) => {
       "success",
       "生成完成",
       mode === "ios"
-        ? "下载已开始。在「文件」中先对 ZIP 选择“保留下载”，下载完成后长按“解压缩”，再单击 PVT 中的“保存到照片”。"
+        ? "下载已开始。在「文件」中先对 ZIP 选择“保留下载”，下载完成后长按“解压缩”，打开 PVT 后先长按确认能播放，再点击“存储/保存到「照片」”。"
         : mode === "mac"
         ? "ZIP 已下载。请在 Mac「照片」中同时导入 JPG 与 MOV，再同步或隔空投送到 iPhone。"
         : zipRequested ? "ZIP 已开始下载，传输到新设备后再解压即可。" : "JPG 已开始下载。",
     );
     if (mode) {
-      guideTitle.textContent = mode === "ios" ? "下载完成，接下来导入照片" : "下载完成，接下来在 Mac 导入";
-      showAppleGuide();
+      showAppleGuide(1);
     }
   } catch (error) {
     setStatus("error", "生成失败", error.message);
@@ -313,7 +329,7 @@ async function initialize() {
     payload.templates.forEach((item) => {
       templateChoice.add(new Option(item.label, item.id));
     });
-    if (payload.templates.length) templateChoice.value = payload.templates[0].id;
+    if (payload.templates.length) templateChoice.value = payload.templates.some(item => item.id === appleIosTemplateId) ? appleIosTemplateId : payload.templates[0].id;
     await inspectTemplate();
   } catch {
     setStatus("error", "服务暂时未就绪", "刷新页面后重试。");

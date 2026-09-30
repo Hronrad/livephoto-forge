@@ -129,7 +129,7 @@ def _extract_honor_trailer(data: bytes) -> tuple[bytes, int]:
     trailer, rather than just the MP4 payload.
     """
     if len(data) < 60:
-        raise ForgeError("Template has no recognizable HONOR motion-photo trailer")
+        raise ForgeError("Template has no recognizable HONOR livephoto trailer")
     trailer = data[-60:]
     try:
         first = trailer[:20].decode("ascii").rstrip()
@@ -137,11 +137,11 @@ def _extract_honor_trailer(data: bytes) -> tuple[bytes, int]:
         live = trailer[40:60].decode("ascii").rstrip()
     except UnicodeDecodeError as exc:
         raise ForgeError(
-            "Template has no recognizable HONOR motion-photo trailer"
+            "Template has no recognizable HONOR livephoto trailer"
         ) from exc
     match = re.fullmatch(r"LIVE_(\d+)", live)
     if not re.match(r"^v\d+_f\d+", first) or not match:
-        raise ForgeError("Template has no recognizable HONOR motion-photo trailer")
+        raise ForgeError("Template has no recognizable HONOR livephoto trailer")
     video_length = int(match.group(1)) - 20
     payload_start = len(data) - len(trailer) - video_length
     if video_length <= 0 or payload_start < 0:
@@ -428,7 +428,7 @@ def inspect_template(template: str | Path) -> TemplateProfile:
         except ForgeError as exc:
             make = str(tags.get("Make", "unknown"))
             raise ForgeError(
-                f"Unsupported motion-photo template format (manufacturer: {make})"
+                f"Unsupported livephoto template format (manufacturer: {make})"
             ) from exc
         template_format = "honor-v2"
         timestamp_us = 500_000
@@ -942,7 +942,7 @@ def _transcode_video(
             stream
             and stream.get("codec_name") == "hevc"
             and "mp4" in formats
-            and 0 < source_duration <= profile.video_duration + 0.5
+            and 0 < source_duration <= min(3.0, duration)
         ):
             # Keep the original HEVC bitstream and MP4 metadata, including
             # Dolby Vision RPU data that a resize or re-encode would discard.
@@ -1182,7 +1182,7 @@ def build_motion_photo(
         source_width, source_height, profile.video_width, profile.video_height
     )
     duration = (
-        options.duration if options.duration is not None else profile.video_duration
+        min(3.0, options.duration) if options.duration is not None else min(3.0, profile.video_duration)
     )
     if duration <= 0:
         raise ForgeError("Duration must be positive")
@@ -1202,7 +1202,7 @@ def build_motion_photo(
         raise ForgeError(f"Unsupported template format: {profile.format}")
     output.parent.mkdir(parents=True, exist_ok=True)
     log(f"Template: {profile.make} {profile.model}")
-    with tempfile.TemporaryDirectory(prefix="wechat-motion-photo-") as td:
+    with tempfile.TemporaryDirectory(prefix="wechat-livephoto-") as td:
         temp = Path(td)
         cover_jpg = temp / "cover.jpg"
         video_mp4 = temp / "motion.mp4"
@@ -1303,7 +1303,7 @@ def build_motion_photo_from_profile(
     video_target = _target_dimensions(
         source_width, source_height, profile.video_width, profile.video_height
     )
-    duration = options.duration if options.duration is not None else profile.video_duration
+    duration = min(3.0, options.duration) if options.duration is not None else min(3.0, profile.video_duration)
     if duration <= 0:
         raise ForgeError("Duration must be positive")
     key_time = (
@@ -1315,7 +1315,7 @@ def build_motion_photo_from_profile(
     timestamp_us = round(key_time * 1_000_000)
     output.parent.mkdir(parents=True, exist_ok=True)
     log(f"Protocol profile: {profile.make} {profile.model}")
-    with tempfile.TemporaryDirectory(prefix="wechat-motion-photo-profile-") as td:
+    with tempfile.TemporaryDirectory(prefix="wechat-livephoto-profile-") as td:
         temp = Path(td)
         cover_jpg = temp / "cover.jpg"
         video_mp4 = temp / "motion.mp4"
